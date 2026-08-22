@@ -1,0 +1,28 @@
+# ===== .NET (backend/TaskPulse.API) =====
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.pdb
+
+# Local-only config that may contain real connection strings/secrets
+appsettings.Development.json
+appsettings.Local.json
+appsettings.Production.json
+
+# ===== Angular (frontend/taskpulse-client) =====
+node_modules/
+dist/
+.angular/
+npm-debug.log
+yarn-error.log
+
+# ===== Editors / OS =====
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# ===== Uploaded files (if TaskAttachments are stored on disk locally) =====
+wwwroot/uploads/
