@@ -11,19 +11,18 @@ namespace TaskPulse.API.DTO.UserDto
         public DateTime CreatedAt { get; set; }
         public bool IsDisabled { get; set; }
 
-        // Maps a saved User entity onto the shape that leaves the API.
-        // This never touches PasswordHash — it's the only path a User's data
-        // takes on its way out, so leaving the hash out here is what actually
-        // keeps it from ever reaching a response.
-        public static UserDTO FromEntity(User user) => new UserDTO
+        public static UserDTO CreateUserDtoFromUserEntity(User user)
         {
-            Id = user.Id,
-            Name = user.Name,
-            Email = user.Email,
-            Role = user.Role.ToString(),
-            profileImageUrl = user.profileImageUrl,
-            CreatedAt = user.CreatedAt,
-            IsDisabled = user.IsDisabled
-        };
+            return new UserDTO
+            {
+                Id = user.Id,
+                Name = user.Name,
+                Email = user.Email,
+                Role = user.Role.ToString(),
+                profileImageUrl = user.profileImageUrl,
+                CreatedAt = user.CreatedAt,
+                IsDisabled = user.IsDisabled
+            };
+        }
     }
 }

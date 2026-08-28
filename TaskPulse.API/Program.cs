@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using TaskPulse.API.Data;
 using TaskPulse.API.DTO.UserDto;
 using TaskPulse.API.ExceptionHandling.ExceptionHandlers;
+using TaskPulse.API.Helper.ValidationHelper.EntityExistenceValidationHelper;
 using TaskPulse.API.Repository.implementations;
 using TaskPulse.API.Repository.interfaces;
 using TaskPulse.API.Validation;
@@ -17,10 +18,11 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddScoped<EntityExistenceChecker>();
 builder.Services.AddScoped<IUserServices, UserService>();
 builder.Services.AddScoped<CustomExceptionHandler>();
 builder.Services.AddScoped<CheckValidationRun>();
-builder.Services.AddScoped<IValidation<CreateUserDto>, UserValidation>();
+builder.Services.AddScoped<IValidation<CreateUserDto>, CreateUserValidation>();
 
 var app = builder.Build();
 

@@ -26,16 +26,20 @@ namespace TaskPulse.API.Repository.implementations
 
 
 
+        // Create User Service Method
         public async Task<CommonResponse<UserDTO>> CreateUserAsync(CreateUserDto dto)
         {
             var response = new CommonResponse<UserDTO>();
 
             try
             {
+                // Get DTO Validated
                 var validation = await _validationRunner.Run(dto);
                 if (!validation.Success)
                     return CommonResponseFactory.CreateErrorResponse<UserDTO>(validation.Errors, validation.StatusCode);
 
+
+                // Creating a User Entity from the DTO.
                 var user = User.CreateUserFromDto(dto);
                 user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password); // Creating a password Hash to store.
 
@@ -43,22 +47,22 @@ namespace TaskPulse.API.Repository.implementations
                 await dbContext.Users.AddAsync(user);
                 await dbContext.SaveChangesAsync();
 
-                return CommonResponseFactory.CreateSuccessResponse(UserDTO.FromEntity(user), CommonResponseMessage.Created.ToText());
+                return CommonResponseFactory.CreateSuccessResponse(UserDTO.CreateUserDtoFromUserEntity(user), CommonResponseMessage.Created.ToText());
             }
             catch (Exception ex)
             {
-                // CustomExceptionHandler gets the first catch — GlobalExceptionHandler
-                // stays the fallback for whatever isn't caught here.
                 return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
             }
         }
 
+
+        // Get User By Id Service Method
         public async Task<CommonResponse<User>> GetUserById(int id)
         {
             var response = new CommonResponse<User>();
 
             try
-            {
+            {// Should be a validation instead.
                 if (id <= 0)
                 {
                     return response.ReturnError(HttpStatusCode.NotFound, CommonResponseMessage.NotFound.ToText());
@@ -78,6 +82,9 @@ namespace TaskPulse.API.Repository.implementations
             }
         }
 
-
+        Task<CommonResponse<UserDTO>> IUserServices.GetUserById(int id)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

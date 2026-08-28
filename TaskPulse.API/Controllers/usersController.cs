@@ -24,12 +24,14 @@ namespace TaskPulse.API.Controllers
             return StatusCode((int)result.StatusCode, result);
         }
 
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetUserById(int id)
         {
 
-            // service to get user by id.
-            return Ok();
+            var result = await _userservice.GetUserById(id);
+            return StatusCode((int)result.StatusCode, result);
         }
+
     }
 }

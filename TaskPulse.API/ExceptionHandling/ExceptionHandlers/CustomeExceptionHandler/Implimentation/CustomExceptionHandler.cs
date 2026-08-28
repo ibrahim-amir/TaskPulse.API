@@ -13,6 +13,8 @@ namespace TaskPulse.API.ExceptionHandling.ExceptionHandlers
     {
         public async Task<CommonResponse<T>> HandleAsync<T>(Exception ex, string context,CommonResponse<T>? response = null)
         {
+            logger.LogError(ex, "Unhandled exception in {Context}", context);
+
             var resp = response ?? new CommonResponse<T>();
             resp.Success = false;
             resp.StatusCode = ex switch
