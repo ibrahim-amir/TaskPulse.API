@@ -1,8 +1,10 @@
-﻿namespace TaskPulse.API.Entities
+﻿using TaskPulse.API.Entities.BaseEntityClass;
+using TaskPulse.API.Entities.EnumForEntities;
+
+namespace TaskPulse.API.Entities
 {
-    public class TaskItem
+    public class TaskItem : BasicEntityClass
     {
-        public int Id { get; set; }
         public string Title { get; set; } = string.Empty;
         public string? Description { get; set; }
 
@@ -21,8 +23,6 @@
 
         public int CreatedByUserId { get; set; }
         public User CreatedByUser { get; set; } = null!;
-
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
 
         public ICollection<Comment> Comments { get; set; } = new List<Comment>();

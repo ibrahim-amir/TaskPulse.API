@@ -108,10 +108,15 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<ActivityLog>(e =>
         {
-            e.HasOne(a => a.User)
-                .WithMany(u => u.ActivityLogs)
-                .HasForeignKey(a => a.UserId)
-                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(a => a.Project)
+                .WithMany()
+                .HasForeignKey(a => a.ProjectId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            e.HasOne(a => a.Task)
+                .WithMany()
+                .HasForeignKey(a => a.TaskId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
         });
     }
 }

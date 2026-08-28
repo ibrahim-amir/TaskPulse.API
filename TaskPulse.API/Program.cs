@@ -1,14 +1,26 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 using TaskPulse.API.Data;
+using TaskPulse.API.DTO.UserDto;
+using TaskPulse.API.ExceptionHandling.ExceptionHandlers;
+using TaskPulse.API.Repository.implementations;
+using TaskPulse.API.Repository.interfaces;
+using TaskPulse.API.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddScoped<IUserServices, UserService>();
+builder.Services.AddScoped<CustomExceptionHandler>();
+builder.Services.AddScoped<CheckValidationRun>();
+builder.Services.AddScoped<IValidation<CreateUserDto>, UserValidation>();
 
 var app = builder.Build();
 

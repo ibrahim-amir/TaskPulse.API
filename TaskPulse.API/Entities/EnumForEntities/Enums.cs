@@ -1,4 +1,4 @@
-﻿namespace TaskPulse.API.Entities;
+﻿namespace TaskPulse.API.Entities.EnumForEntities;
 
 public enum UserRole
 {
@@ -30,5 +30,3 @@ public enum TaskItemStatus
     Done,
     Blocked
 }
-
-
