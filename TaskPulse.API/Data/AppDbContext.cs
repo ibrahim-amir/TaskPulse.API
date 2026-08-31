@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TaskPulse.API.Entities;
 using TaskPulse.API.Entities.EnumForEntities;
-using TaskPulse.API.Helper.PasswordHelperClass;
 
 namespace TaskPulse.API.Data;
 
@@ -30,12 +29,19 @@ public class AppDbContext : DbContext
 
             // Single hardcoded Admin, per the single-org app design. Login with
             // this account, then change the password via forgot/reset-password.
+            //
+            // The hash is a literal, not PasswordHelper.HashPassword("..."):
+            // BCrypt salts randomly, so hashing here would produce a different
+            // value on every build and EF would see the model as permanently
+            // changed (PendingModelChangesWarning). Seed data has to be static.
+            // This is BCrypt("ChangeMe123!") — change the password after first
+            // login rather than editing this string.
             e.HasData(new User
             {
                 Id = 1,
                 Name = "Admin",
                 Email = "admin@taskpulse.local",
-                PasswordHash = PasswordHelper.HashPassword("ChangeMe123!"),
+                PasswordHash = "$2a$11$Jq4mIC9S3KdDM17V8AZvKOxW0Ljd4eicGvHgRRe0KzxMbqUjZXn.m",
                 Role = UserRole.Admin,
                 IsEmailConfirmed = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)

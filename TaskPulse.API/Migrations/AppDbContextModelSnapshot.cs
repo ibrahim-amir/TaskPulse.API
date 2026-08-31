@@ -374,6 +374,11 @@ namespace TaskPulse.API.Migrations
                     b.Property<bool>("RefreshTokenRememberMe")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("profileImageUrl")
                         .HasColumnType("nvarchar(max)");
 
@@ -383,6 +388,20 @@ namespace TaskPulse.API.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Email = "admin@taskpulse.local",
+                            IsDisabled = false,
+                            IsEmailConfirmed = true,
+                            Name = "Admin",
+                            PasswordHash = "$2a$11$Jq4mIC9S3KdDM17V8AZvKOxW0Ljd4eicGvHgRRe0KzxMbqUjZXn.m",
+                            RefreshTokenRememberMe = false,
+                            Role = "Admin"
+                        });
                 });
 
             modelBuilder.Entity("TaskPulse.API.Entities.ActivityLog", b =>
