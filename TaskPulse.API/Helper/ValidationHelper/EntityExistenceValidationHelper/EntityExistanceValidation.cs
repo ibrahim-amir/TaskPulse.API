@@ -161,7 +161,28 @@ public class EntityExistenceChecker
         return duplicates;
     }
 
-    private async Task<bool> FieldExistsAsync(Type entityType, string fieldName, object value)
+    // --- Duplicate check that ignores one row: for updates, not creates ---
+    //
+    // Same as CheckFieldsAreUnique, except the row being edited doesn't count as
+    // a duplicate of itself — otherwise saving a user without changing their name
+    // would fail on their own name. Relies on every entity inheriting Id.
+    // errors.AddRange(await _existenceChecker.CheckFieldsAreUniqueExcluding(
+    //     obj.Id, (typeof(User), "Name", obj.Name)));
+    public async Task<List<string>> CheckFieldsAreUniqueExcluding(object excludedId, params (Type EntityType, string FieldName, object Value)[] checks)
+    {
+        var duplicates = new List<string>();
+
+        foreach (var (entityType, fieldName, value) in checks)
+        {
+            bool exists = await FieldExistsAsync(entityType, fieldName, value, excludedId);
+            if (exists)
+                duplicates.Add($"{entityType.Name}.{fieldName} with value '{value}' is already in use.");
+        }
+
+        return duplicates;
+    }
+
+    private async Task<bool> FieldExistsAsync(Type entityType, string fieldName, object value, object? excludedId = null)
     {
         // _db.Set<TEntity>() — but TEntity is only known as a runtime Type here,
         // so call the generic method via reflection instead of Set<T>() directly.
@@ -178,9 +199,25 @@ public class EntityExistenceChecker
         var parameter = Expression.Parameter(entityType, "e");
         var propertyAccess = Expression.Property(parameter, property);
         var constant = Expression.Constant(value, property.PropertyType);
-        var equalsExpression = Expression.Equal(propertyAccess, constant);
+        Expression predicateBody = Expression.Equal(propertyAccess, constant);
+
+        // On an update, add "&& e.Id != excludedId" so the row being edited
+        // isn't counted as a duplicate of itself.
+        if (excludedId is not null)
+        {
+            var idProperty = entityType.GetProperty("Id", BindingFlags.Public | BindingFlags.Instance);
+            if (idProperty is null)
+                throw new NotSupportedException($"'{entityType.Name}' has no Id property to exclude on.");
+
+            var idNotEqual = Expression.NotEqual(
+                Expression.Property(parameter, idProperty),
+                Expression.Constant(excludedId, idProperty.PropertyType));
+
+            predicateBody = Expression.AndAlso(predicateBody, idNotEqual);
+        }
+
         var predicateType = typeof(Func<,>).MakeGenericType(entityType, typeof(bool));
-        var lambda = Expression.Lambda(predicateType, equalsExpression, parameter);
+        var lambda = Expression.Lambda(predicateType, predicateBody, parameter);
 
         // Call the equivalent of: dbSet.AnyAsync(lambda)
         var anyAsyncMethod = typeof(EntityFrameworkQueryableExtensions)

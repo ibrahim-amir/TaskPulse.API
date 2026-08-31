@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TaskPulse.API.Entities;
+using TaskPulse.API.Entities.EnumForEntities;
+using TaskPulse.API.Helper.PasswordHelperClass;
 
 namespace TaskPulse.API.Data;
 
@@ -24,6 +26,20 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<User>(e =>
         {
             e.HasIndex(u => u.Email).IsUnique();
+            e.Property(u => u.Role).HasConversion<string>().HasMaxLength(20);
+
+            // Single hardcoded Admin, per the single-org app design. Login with
+            // this account, then change the password via forgot/reset-password.
+            e.HasData(new User
+            {
+                Id = 1,
+                Name = "Admin",
+                Email = "admin@taskpulse.local",
+                PasswordHash = PasswordHelper.HashPassword("ChangeMe123!"),
+                Role = UserRole.Admin,
+                IsEmailConfirmed = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            });
         });
 
         modelBuilder.Entity<Project>(e =>

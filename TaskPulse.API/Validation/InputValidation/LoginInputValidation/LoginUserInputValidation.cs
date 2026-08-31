@@ -1,5 +1,6 @@
 ﻿using FluentValidation;
 using TaskPulse.API.DTO.UserDto;
+using TaskPulse.API.Helper.ValidationHelper;
 
 namespace TaskPulse.API.Validation.InputValidation.LoginInputValidation
 {
@@ -9,7 +10,7 @@ namespace TaskPulse.API.Validation.InputValidation.LoginInputValidation
         {
             RuleFor(x => x.Email)
            .NotEmpty().WithMessage("Email is required.")
-           .EmailAddress().WithMessage("Invalid email format.");
+           .IsValidEmail();
 
             RuleFor(x => x.Password)
            .NotEmpty().WithMessage("Password is required.");

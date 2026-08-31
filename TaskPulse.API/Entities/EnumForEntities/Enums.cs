@@ -30,3 +30,17 @@ public enum TaskItemStatus
     Done,
     Blocked
 }
+
+// Written to ActivityLog.Action via .ToText(). Login rows are also what
+// attendance is read back from, so don't rename that one casually.
+public enum ActivityAction
+{
+    Login,
+    Logout,
+    UserCreated,
+    UserProfileUpdated,
+    UserRoleChanged,
+    UserStatusChanged,
+    EmailConfirmed,
+    PasswordReset
+}

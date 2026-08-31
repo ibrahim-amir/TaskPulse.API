@@ -26,10 +26,9 @@ namespace TaskPulse.API.Validation.UserValidation
 
         public async Task<CommonResponse<LoginDto>> Validate(LoginDto obj)
         {
+            //Check input validation.
             var inputValidation = _inputValidation.Validate(obj);
             var errors = new List<string>();
-            //Check input validation.
-
             if (!inputValidation.IsValid)
             {
                 errors.AddRange(inputValidation.Errors.Select(e => e.ErrorMessage));
@@ -37,12 +36,16 @@ namespace TaskPulse.API.Validation.UserValidation
             }
 
             //Check the email actually exists before we touch the password at all.
-            var missing = await _existenceChecker.CheckAllFieldExists((typeof(User), Entity.User.Email.ToText(), obj.Email));
+            var missing = await _existenceChecker.CheckAllFieldExists
+              (
+                (typeof(User), Entity.User.Email.ToText(), obj.Email)
+              );
             if (missing.Count > 0)
             {
                 errors.Add("Invalid email or password.");
                 return CommonResponseFactory.CreateErrorResponse<LoginDto>(errors, HttpStatusCode.BadRequest);
             }
+
 
             //Check Password Validation.
             var user = await _userRepository.GetByEmailAsync(obj.Email);
@@ -50,6 +53,21 @@ namespace TaskPulse.API.Validation.UserValidation
             {
                 errors.Add("Invalid email or password.");
                 return CommonResponseFactory.CreateErrorResponse<LoginDto>(errors, HttpStatusCode.BadRequest);
+            }
+
+            //Only check account state AFTER the password is confirmed correct
+            //otherwise this leaks whether an account is disabled/unconfirmed to
+            //anyone who doesn't actually know the password.
+            if (user.IsDisabled)
+            {
+                errors.Add("This account has been disabled.");
+                return CommonResponseFactory.CreateErrorResponse<LoginDto>(errors, HttpStatusCode.Forbidden);
+            }
+
+            if (!user.IsEmailConfirmed)
+            {
+                errors.Add("Please confirm your email before logging in.");
+                return CommonResponseFactory.CreateErrorResponse<LoginDto>(errors, HttpStatusCode.Forbidden);
             }
 
             //If validated.

@@ -19,6 +19,7 @@ public class CreateUserValidation : IValidation<CreateUserDto>
 
     public async Task<CommonResponse<CreateUserDto>> Validate(CreateUserDto obj)
     {
+        //Input Validation.
         var inputValidationResult = _userInputValidation.Validate(obj);
         var errors = new List<string>();
 
@@ -28,6 +29,7 @@ public class CreateUserValidation : IValidation<CreateUserDto>
             return CommonResponseFactory.CreateErrorResponse<CreateUserDto>(errors, HttpStatusCode.BadRequest);
         }
 
+        //Existance validation.
         errors.AddRange(await _existance.CheckFieldsAreUnique
         (
             (typeof(User), Entity.User.Name.ToText(), obj.Name),

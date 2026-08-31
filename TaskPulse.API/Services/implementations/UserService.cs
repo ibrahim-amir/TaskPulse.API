@@ -2,8 +2,10 @@ using System.Net;
 using TaskPulse.API.CommonResponseClass;
 using TaskPulse.API.CommonResponseMessages;
 using TaskPulse.API.CommonResponseMessageExtensions;
+using TaskPulse.API.DTO.PagingDto;
 using TaskPulse.API.DTO.UserDto;
 using TaskPulse.API.Entities;
+using TaskPulse.API.Entities.EnumForEntities;
 using TaskPulse.API.ExceptionHandling.ExceptionHandlers;
 using TaskPulse.API.Services.interfaces;
 using TaskPulse.API.Services.Infrastructure;
@@ -11,6 +13,7 @@ using TaskPulse.API.Validation;
 using TaskPulse.API.Repository.UserRepo;
 using TaskPulse.API.Authentication;
 using TaskPulse.API.Helper.PasswordHelperClass;
+using TaskPulse.API.Helper.TokenHelperClass;
 
 namespace TaskPulse.API.Services.implementations
 {
@@ -19,13 +22,23 @@ namespace TaskPulse.API.Services.implementations
         private readonly CheckValidationRun _validationRunner;
         private readonly UserRepository _userRepository;
         private readonly TokenService _tokenService;
+        private readonly IAccountTokenNotifier _accountTokenNotifier;
+        private readonly IActivityLogger _activityLogger;
 
-        public UserService(CustomExceptionHandler customExceptionHandler, CheckValidationRun validationRunner, UserRepository userRepository, TokenService tokenService)
-        : base(customExceptionHandler)
+        public UserService(
+            CustomExceptionHandler customExceptionHandler,
+            CheckValidationRun validationRunner,
+            UserRepository userRepository,
+            TokenService tokenService,
+            IAccountTokenNotifier accountTokenNotifier,
+            IActivityLogger activityLogger)
+            : base(customExceptionHandler)
         {
             _validationRunner = validationRunner;
             _userRepository = userRepository;
             _tokenService = tokenService;
+            _accountTokenNotifier = accountTokenNotifier;
+            _activityLogger = activityLogger;
         }
 
 
@@ -47,7 +60,10 @@ namespace TaskPulse.API.Services.implementations
                 var user = User.CreateUserFromDto(dto);
                 user.PasswordHash = PasswordHelper.HashPassword(dto.Password); // Creating a password Hash to store.
 
+                var confirmationToken = _accountTokenNotifier.IssueEmailConfirmationToken(user);
                 await _userRepository.CreateUserAsync(user);
+                await _accountTokenNotifier.SendEmailConfirmationAsync(user.Email, confirmationToken);
+                await _activityLogger.LogAsync(user.Id, ActivityAction.UserCreated, $"Account created with role {user.Role}.");
 
                 return CommonResponseFactory.CreateSuccessResponse(UserDTO.CreateUserDtoFromUserEntity(user), CommonResponseMessage.Created.ToText());
             }
@@ -62,9 +78,9 @@ namespace TaskPulse.API.Services.implementations
         public async Task<CommonResponse<UserDTO>> GetUserById(int id)
         {
             var response = new CommonResponse<UserDTO>();
-
             try
             {
+                //Get user by id from repo.
                 var user = await _userRepository.GetByIdAsync(id);
 
                 if (user is null)
@@ -79,8 +95,205 @@ namespace TaskPulse.API.Services.implementations
         }
 
 
+        public async Task<CommonResponse<PagedResult<UserDTO>>> GetUsersAsync(UserQueryDto query)
+        {
+            var response = new CommonResponse<PagedResult<UserDTO>>();
+
+            try
+            {
+                var page = await _userRepository.GetPagedAsync(query);
+                var mappedPage = page.MapItems(UserDTO.CreateUserDtoFromUserEntity);
+
+                return CommonResponseFactory.CreateSuccessResponse(mappedPage, "Users retrieved.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Update User Profile Service Method — name and image only.
+        public async Task<CommonResponse<UserDTO>> UpdateUserProfileAsync(UpdateUserProfileDto dto)
+        {
+            var response = new CommonResponse<UserDTO>();
+
+            try
+            {
+                var validation = await _validationRunner.Run(dto);
+                if (!validation.Success)
+                    return CommonResponseFactory.CreateErrorResponse<UserDTO>(validation.Errors, validation.StatusCode);
+
+                var user = await _userRepository.GetByIdAsync(dto.Id);
+                if (user is null)
+                    return CommonResponseFactory.CreateErrorResponse<UserDTO>("User not found.", HttpStatusCode.NotFound);
+
+                user.Name = dto.Name;
+                user.profileImageUrl = dto.profileImageUrl;
+                await _userRepository.UpdateUserAsync(user);
+                await _activityLogger.LogAsync(user.Id, ActivityAction.UserProfileUpdated, "Profile updated.");
+
+                return CommonResponseFactory.CreateSuccessResponse(UserDTO.CreateUserDtoFromUserEntity(user), "Profile updated.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Update User Role Service Method — Admin only, guarded against
+        // demoting the last Admin (validation layer).
+        public async Task<CommonResponse<UserDTO>> UpdateUserRoleAsync(UpdateUserRoleDto dto)
+        {
+            var response = new CommonResponse<UserDTO>();
+
+            try
+            {
+                var validation = await _validationRunner.Run(dto);
+                if (!validation.Success)
+                    return CommonResponseFactory.CreateErrorResponse<UserDTO>(validation.Errors, validation.StatusCode);
+
+                var user = await _userRepository.GetByIdAsync(dto.Id);
+                if (user is null)
+                    return CommonResponseFactory.CreateErrorResponse<UserDTO>("User not found.", HttpStatusCode.NotFound);
+
+                user.Role = dto.Role;
+                await _userRepository.UpdateUserAsync(user);
+                await _activityLogger.LogAsync(user.Id, ActivityAction.UserRoleChanged, $"Role set to {user.Role}.");
+
+                return CommonResponseFactory.CreateSuccessResponse(UserDTO.CreateUserDtoFromUserEntity(user), "Role updated.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Set User Status Service Method — backs both PUT /status and DELETE.
+        // Disabling also clears the refresh token, so the account can't be kept
+        // alive by refreshing after it's been switched off.
+        public async Task<CommonResponse<UserDTO>> SetUserStatusAsync(UpdateUserStatusDto dto)
+        {
+            var response = new CommonResponse<UserDTO>();
+
+            try
+            {
+                var validation = await _validationRunner.Run(dto);
+                if (!validation.Success)
+                    return CommonResponseFactory.CreateErrorResponse<UserDTO>(validation.Errors, validation.StatusCode);
+
+                var user = await _userRepository.GetByIdAsync(dto.Id);
+                if (user is null)
+                    return CommonResponseFactory.CreateErrorResponse<UserDTO>("User not found.", HttpStatusCode.NotFound);
+
+                user.IsDisabled = dto.IsDisabled;
+
+                if (dto.IsDisabled)
+                {
+                    user.RefreshTokenHash = null;
+                    user.RefreshTokenExpiresAt = null;
+                    user.RefreshTokenRememberMe = false;
+                }
+
+                await _userRepository.UpdateUserAsync(user);
+                await _activityLogger.LogAsync(user.Id,ActivityAction.UserStatusChanged,dto.IsDisabled ? "Account disabled." : "Account enabled.");
+
+                return CommonResponseFactory.CreateSuccessResponse(UserDTO.CreateUserDtoFromUserEntity(user),dto.IsDisabled ? "Account disabled." : "Account enabled.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
         // Login Service Method
-        public async Task<CommonResponse<string>> LoginAsync(LoginDto dto)
+        public async Task<CommonResponse<AuthResponseDto>> LoginAsync(LoginDto dto)
+        {
+            var response = new CommonResponse<AuthResponseDto>();
+
+            try
+            {
+                var validation = await _validationRunner.Run(dto);
+                if (!validation.Success)
+                    return CommonResponseFactory.CreateErrorResponse<AuthResponseDto>(validation.Errors, validation.StatusCode);
+
+                var user = await _userRepository.GetByEmailAsync(dto.Email);
+                if (user is null)
+                    return CommonResponseFactory.CreateErrorResponse<AuthResponseDto>("Invalid email or password.", HttpStatusCode.Unauthorized);
+
+                var authResponse = _tokenService.IssueAuthTokens(user, dto.RememberMe);
+                await _userRepository.UpdateUserAsync(user);
+
+                //Attendance is read back off these rows — one login is one day present.
+                await _activityLogger.LogAsync(user.Id, ActivityAction.Login, "Signed in.");
+
+                return CommonResponseFactory.CreateSuccessResponse(authResponse, "Login successful.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Refresh Token Service Method
+        public async Task<CommonResponse<AuthResponseDto>> RefreshTokenAsync(RefreshTokenRequestDto dto)
+        {
+            var response = new CommonResponse<AuthResponseDto>();
+
+            try
+            {
+                var validation = await _validationRunner.Run(dto);
+                if (!validation.Success)
+                    return CommonResponseFactory.CreateErrorResponse<AuthResponseDto>(validation.Errors, validation.StatusCode);
+
+                var user = await _userRepository.GetByRefreshTokenHashAsync(TokenHasher.HashToken(dto.RefreshToken));
+                if (user is null)
+                    return CommonResponseFactory.CreateErrorResponse<AuthResponseDto>("Refresh token is invalid or expired.", HttpStatusCode.Unauthorized);
+
+                var authResponse = _tokenService.IssueAuthTokens(user, user.RefreshTokenRememberMe);
+                await _userRepository.UpdateUserAsync(user);
+
+                return CommonResponseFactory.CreateSuccessResponse(authResponse, "Token refreshed.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Logout Service Method
+        public async Task<CommonResponse<string>> LogoutAsync(int userId)
+        {
+            var response = new CommonResponse<string>();
+
+            try
+            {
+                var user = await _userRepository.GetByIdAsync(userId);
+                if (user is null)
+                    return CommonResponseFactory.CreateErrorResponse<string>("User not found.", HttpStatusCode.NotFound);
+
+                user.RefreshTokenHash = null;
+                user.RefreshTokenExpiresAt = null;
+                user.RefreshTokenRememberMe = false;
+                await _userRepository.UpdateUserAsync(user);
+                await _activityLogger.LogAsync(user.Id, ActivityAction.Logout, "Signed out.");
+
+                return CommonResponseFactory.CreateSuccessResponse("Logged out.", "Logged out successfully.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Confirm Email Service Method
+        public async Task<CommonResponse<string>> ConfirmEmailAsync(ConfirmEmailDto dto)
         {
             var response = new CommonResponse<string>();
 
@@ -92,10 +305,105 @@ namespace TaskPulse.API.Services.implementations
 
                 var user = await _userRepository.GetByEmailAsync(dto.Email);
                 if (user is null)
-                    return CommonResponseFactory.CreateErrorResponse<string>("Invalid email or password.", HttpStatusCode.Unauthorized);
+                    return CommonResponseFactory.CreateErrorResponse<string>("Invalid email or confirmation token.", HttpStatusCode.BadRequest);
 
-                var token = _tokenService.GenerateToken(user);
-                return CommonResponseFactory.CreateSuccessResponse(token, "Login successful.");
+                user.IsEmailConfirmed = true;
+                user.EmailConfirmationTokenHash = null;
+                user.EmailConfirmationTokenExpiresAt = null;
+                await _userRepository.UpdateUserAsync(user);
+                await _activityLogger.LogAsync(user.Id, ActivityAction.EmailConfirmed, "Email confirmed.");
+
+                return CommonResponseFactory.CreateSuccessResponse("Email confirmed.", "Your email has been confirmed.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+        public async Task<CommonResponse<string>> ResendConfirmationAsync(ResendConfirmationDto dto)
+        {
+            var response = new CommonResponse<string>();
+            const string genericMessage = "If that email is registered and not yet confirmed, a new confirmation link has been sent.";
+
+            try
+            {
+                var validation = await _validationRunner.Run(dto);
+                if (!validation.Success)
+                    return CommonResponseFactory.CreateErrorResponse<string>(validation.Errors, validation.StatusCode);
+
+                var user = await _userRepository.GetByEmailAsync(dto.Email);
+                if (user is not null && !user.IsEmailConfirmed)
+                {
+                    var confirmationToken = _accountTokenNotifier.IssueEmailConfirmationToken(user);
+                    await _userRepository.UpdateUserAsync(user);
+                    await _accountTokenNotifier.SendEmailConfirmationAsync(user.Email, confirmationToken);
+                }
+                return CommonResponseFactory.CreateSuccessResponse(genericMessage, genericMessage);
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Forgot Password Service Method
+        public async Task<CommonResponse<string>> ForgotPasswordAsync(ForgotPasswordDto dto)
+        {
+            var response = new CommonResponse<string>();
+            const string genericMessage = "If that email is registered, a password reset link has been sent.";
+
+            try
+            {
+                var validation = await _validationRunner.Run(dto);
+                if (!validation.Success)
+                    return CommonResponseFactory.CreateErrorResponse<string>(validation.Errors, validation.StatusCode);
+
+                var user = await _userRepository.GetByEmailAsync(dto.Email);
+                if (user is not null)
+                {
+                    var resetToken = _accountTokenNotifier.IssuePasswordResetToken(user);
+                    await _userRepository.UpdateUserAsync(user);
+                    await _accountTokenNotifier.SendPasswordResetEmailAsync(user.Email, resetToken);
+                }
+
+                return CommonResponseFactory.CreateSuccessResponse(genericMessage, genericMessage);
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Reset Password Service Method
+        public async Task<CommonResponse<string>> ResetPasswordAsync(ResetPasswordDto dto)
+        {
+            var response = new CommonResponse<string>();
+
+            try
+            {
+                var validation = await _validationRunner.Run(dto);
+                if (!validation.Success)
+                    return CommonResponseFactory.CreateErrorResponse<string>(validation.Errors, validation.StatusCode);
+
+                var user = await _userRepository.GetByEmailAsync(dto.Email);
+                if (user is null)
+                    return CommonResponseFactory.CreateErrorResponse<string>("Invalid or expired reset link.", HttpStatusCode.BadRequest);
+
+                user.PasswordHash = PasswordHelper.HashPassword(dto.NewPassword);
+                user.PasswordResetTokenHash = null;
+                user.PasswordResetTokenExpiresAt = null;
+
+                user.RefreshTokenHash = null;
+                user.RefreshTokenExpiresAt = null;
+                user.RefreshTokenRememberMe = false;
+
+                await _userRepository.UpdateUserAsync(user);
+                await _activityLogger.LogAsync(user.Id, ActivityAction.PasswordReset, "Password reset.");
+
+                return CommonResponseFactory.CreateSuccessResponse("Password reset.", "Your password has been reset. Please log in again.");
             }
             catch (Exception ex)
             {

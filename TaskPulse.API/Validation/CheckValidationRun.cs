@@ -9,12 +9,30 @@ namespace TaskPulse.API.Validation
 
         // Add one line per new DTO that needs validation:
         // { typeof(CreateProjectDto), projectValidation },
-        public CheckValidationRun(IValidation<CreateUserDto> userValidation, IValidation<LoginDto> loginValidation)
+        public CheckValidationRun(
+            IValidation<CreateUserDto> userValidation,
+            IValidation<LoginDto> loginValidation,
+            IValidation<RefreshTokenRequestDto> refreshTokenValidation,
+            IValidation<ConfirmEmailDto> confirmEmailValidation,
+            IValidation<ResendConfirmationDto> resendConfirmationValidation,
+            IValidation<ForgotPasswordDto> forgotPasswordValidation,
+            IValidation<ResetPasswordDto> resetPasswordValidation,
+            IValidation<UpdateUserProfileDto> updateUserProfileValidation,
+            IValidation<UpdateUserRoleDto> updateUserRoleValidation,
+            IValidation<UpdateUserStatusDto> updateUserStatusValidation)
         {
             _validators = new Dictionary<Type, object>
             {
                 { typeof(CreateUserDto), userValidation },
-                { typeof(LoginDto), loginValidation }
+                { typeof(LoginDto), loginValidation },
+                { typeof(RefreshTokenRequestDto), refreshTokenValidation },
+                { typeof(ConfirmEmailDto), confirmEmailValidation },
+                { typeof(ResendConfirmationDto), resendConfirmationValidation },
+                { typeof(ForgotPasswordDto), forgotPasswordValidation },
+                { typeof(ResetPasswordDto), resetPasswordValidation },
+                { typeof(UpdateUserProfileDto), updateUserProfileValidation },
+                { typeof(UpdateUserRoleDto), updateUserRoleValidation },
+                { typeof(UpdateUserStatusDto), updateUserStatusValidation }
             };
         }
 
