@@ -142,9 +142,6 @@ namespace TaskPulse.API.Migrations
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("ManagerId")
-                        .HasColumnType("int");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -164,8 +161,6 @@ namespace TaskPulse.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ManagerId");
-
                     b.ToTable("Projects");
                 });
 
@@ -177,11 +172,16 @@ namespace TaskPulse.API.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("JoinedAt")
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int>("UserId")
                         .HasColumnType("int");
@@ -196,6 +196,38 @@ namespace TaskPulse.API.Migrations
                     b.ToTable("ProjectMembers");
                 });
 
+            modelBuilder.Entity("TaskPulse.API.Entities.TaskAssignment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AssignedByRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TaskId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TaskId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("TaskAssignments");
+                });
+
             modelBuilder.Entity("TaskPulse.API.Entities.TaskAttachment", b =>
                 {
                     b.Property<int>("Id")
@@ -207,6 +239,9 @@ namespace TaskPulse.API.Migrations
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("FileName")
                         .IsRequired()
@@ -221,9 +256,6 @@ namespace TaskPulse.API.Migrations
 
                     b.Property<int>("TaskId")
                         .HasColumnType("int");
-
-                    b.Property<DateTime>("UploadedAt")
-                        .HasColumnType("datetime2");
 
                     b.Property<int>("UploadedByUserId")
                         .HasColumnType("int");
@@ -247,9 +279,6 @@ namespace TaskPulse.API.Migrations
 
                     b.Property<decimal?>("ActualHours")
                         .HasColumnType("decimal(6,2)");
-
-                    b.Property<int?>("AssignedUserId")
-                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -288,8 +317,6 @@ namespace TaskPulse.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AssignedUserId");
-
                     b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("ProjectId");
@@ -322,11 +349,6 @@ namespace TaskPulse.API.Migrations
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("profileImageUrl")
                         .HasColumnType("nvarchar(max)");
@@ -392,17 +414,6 @@ namespace TaskPulse.API.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("TaskPulse.API.Entities.Project", b =>
-                {
-                    b.HasOne("TaskPulse.API.Entities.User", "Manager")
-                        .WithMany("ManagedProjects")
-                        .HasForeignKey("ManagerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Manager");
-                });
-
             modelBuilder.Entity("TaskPulse.API.Entities.ProjectMember", b =>
                 {
                     b.HasOne("TaskPulse.API.Entities.Project", "Project")
@@ -418,6 +429,25 @@ namespace TaskPulse.API.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TaskPulse.API.Entities.TaskAssignment", b =>
+                {
+                    b.HasOne("TaskPulse.API.Entities.TaskItem", "Task")
+                        .WithMany("Assignments")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TaskPulse.API.Entities.User", "User")
+                        .WithMany("TaskAssignments")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Task");
 
                     b.Navigation("User");
                 });
@@ -443,11 +473,6 @@ namespace TaskPulse.API.Migrations
 
             modelBuilder.Entity("TaskPulse.API.Entities.TaskItem", b =>
                 {
-                    b.HasOne("TaskPulse.API.Entities.User", "AssignedUser")
-                        .WithMany("AssignedTasks")
-                        .HasForeignKey("AssignedUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("TaskPulse.API.Entities.User", "CreatedByUser")
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")
@@ -459,8 +484,6 @@ namespace TaskPulse.API.Migrations
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("AssignedUser");
 
                     b.Navigation("CreatedByUser");
 
@@ -476,6 +499,8 @@ namespace TaskPulse.API.Migrations
 
             modelBuilder.Entity("TaskPulse.API.Entities.TaskItem", b =>
                 {
+                    b.Navigation("Assignments");
+
                     b.Navigation("Attachments");
 
                     b.Navigation("Comments");
@@ -485,15 +510,13 @@ namespace TaskPulse.API.Migrations
                 {
                     b.Navigation("ActivityLogs");
 
-                    b.Navigation("AssignedTasks");
-
                     b.Navigation("Comments");
-
-                    b.Navigation("ManagedProjects");
 
                     b.Navigation("Notifications");
 
                     b.Navigation("ProjectMemberships");
+
+                    b.Navigation("TaskAssignments");
 
                     b.Navigation("UploadedAttachments");
                 });

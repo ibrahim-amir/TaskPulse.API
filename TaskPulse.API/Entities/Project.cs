@@ -1,4 +1,4 @@
-﻿using TaskPulse.API.Entities.BaseEntityClass;
+using TaskPulse.API.Entities.BaseEntityClass;
 using TaskPulse.API.Entities.EnumForEntities;
 
 namespace TaskPulse.API.Entities
@@ -11,9 +11,6 @@ namespace TaskPulse.API.Entities
         public PriorityLevel Priority { get; set; } = PriorityLevel.Medium;
         public DateTime StartDate { get; set; }
         public DateTime? EndDate { get; set; }
-
-        public int ManagerId { get; set; }
-        public User Manager { get; set; } = null!;
 
         public ICollection<ProjectMember> Members { get; set; } = new List<ProjectMember>();
         public ICollection<TaskItem> Tasks { get; set; } = new List<TaskItem>();

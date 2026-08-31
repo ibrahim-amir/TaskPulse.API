@@ -1,4 +1,4 @@
-﻿using TaskPulse.API.Entities.BaseEntityClass;
+using TaskPulse.API.Entities.BaseEntityClass;
 using TaskPulse.API.Entities.EnumForEntities;
 
 namespace TaskPulse.API.Entities
@@ -18,8 +18,7 @@ namespace TaskPulse.API.Entities
         public int ProjectId { get; set; }
         public Project Project { get; set; } = null!;
 
-        public int? AssignedUserId { get; set; }
-        public User? AssignedUser { get; set; }
+        public ICollection<TaskAssignment> Assignments { get; set; } = new List<TaskAssignment>();
 
         public int CreatedByUserId { get; set; }
         public User CreatedByUser { get; set; } = null!;

@@ -1,4 +1,5 @@
-﻿using TaskPulse.API.Entities.BaseEntityClass;
+using TaskPulse.API.Entities.BaseEntityClass;
+using TaskPulse.API.Entities.EnumForEntities;
 
 namespace TaskPulse.API.Entities
 {
@@ -8,5 +9,6 @@ namespace TaskPulse.API.Entities
         public Project Project { get; set; } = null!;
         public int UserId { get; set; }
         public User User { get; set; } = null!;
+        public UserRole Role { get; set; }
     }
 }

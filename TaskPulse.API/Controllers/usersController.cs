@@ -1,11 +1,12 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TaskPulse.API.DTO.UserDto;
-using TaskPulse.API.Repository.interfaces;
+using TaskPulse.API.Services.interfaces;
 
 namespace TaskPulse.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class usersController : ControllerBase
     {
         private readonly IUserServices _userservice;
@@ -13,15 +14,6 @@ namespace TaskPulse.API.Controllers
         public usersController(IUserServices userservice)
         {
             _userservice = userservice;
-        }
-
-
-        // These are where the actual services Start.
-        [HttpPost]
-        public async Task<IActionResult> CreateUser(CreateUserDto userdto)
-        {
-            var result = await _userservice.CreateUserAsync(userdto);
-            return StatusCode((int)result.StatusCode, result);
         }
 
 

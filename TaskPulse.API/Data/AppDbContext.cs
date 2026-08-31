@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using TaskPulse.API.Entities;
 
 namespace TaskPulse.API.Data;
@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
+    public DbSet<TaskAssignment> TaskAssignments => Set<TaskAssignment>();
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
     public DbSet<Notification> Notifications => Set<Notification>();
@@ -23,15 +24,12 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<User>(e =>
         {
             e.HasIndex(u => u.Email).IsUnique();
-            e.Property(u => u.Role).HasConversion<string>().HasMaxLength(20);
         });
 
         modelBuilder.Entity<Project>(e =>
         {
             e.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(p => p.Priority).HasConversion<string>().HasMaxLength(20);
-
-            e.HasOne(p => p.Manager).WithMany(u => u.ManagedProjects).HasForeignKey(p => p.ManagerId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<TaskItem>(e =>
@@ -46,11 +44,6 @@ public class AppDbContext : DbContext
                 .HasForeignKey(t => t.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            e.HasOne(t => t.AssignedUser)
-                .WithMany(u => u.AssignedTasks)
-                .HasForeignKey(t => t.AssignedUserId)
-                .OnDelete(DeleteBehavior.SetNull);
-
             e.HasOne(t => t.CreatedByUser)
                 .WithMany()
                 .HasForeignKey(t => t.CreatedByUserId)
@@ -60,6 +53,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<ProjectMember>(e =>
         {
             e.HasIndex(pm => new { pm.ProjectId, pm.UserId }).IsUnique();
+            e.Property(pm => pm.Role).HasConversion<string>().HasMaxLength(20);
 
             e.HasOne(pm => pm.Project)
                 .WithMany(p => p.Members)
@@ -69,6 +63,22 @@ public class AppDbContext : DbContext
             e.HasOne(pm => pm.User)
                 .WithMany(u => u.ProjectMemberships)
                 .HasForeignKey(pm => pm.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TaskAssignment>(e =>
+        {
+            e.HasIndex(a => new { a.TaskId, a.UserId }).IsUnique();
+            e.Property(a => a.AssignedByRole).HasConversion<string>().HasMaxLength(20);
+
+            e.HasOne(a => a.Task)
+                .WithMany(t => t.Assignments)
+                .HasForeignKey(a => a.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(a => a.User)
+                .WithMany(u => u.TaskAssignments)
+                .HasForeignKey(a => a.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

@@ -9,6 +9,8 @@ namespace TaskPulse.API.CommonResponseClass
         public List<string> Errors { get; set; } = new();
         public T? Data { get; set; }
         public HttpStatusCode StatusCode { get; set; }
+        public string? ErrorCode { get; set; }
+        public string? TraceId { get; set; }
     }
     public static class CommonResponseFactory
     {

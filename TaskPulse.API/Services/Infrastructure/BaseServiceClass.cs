@@ -1,7 +1,7 @@
 ﻿using Microsoft.Identity.Client;
 using TaskPulse.API.ExceptionHandling.ExceptionHandlers;
 
-namespace TaskPulse.API.Repository.Infrastructure
+namespace TaskPulse.API.Services.Infrastructure
 {
     public class BaseServiceClass 
     {

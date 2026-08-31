@@ -9,11 +9,12 @@ namespace TaskPulse.API.Validation
 
         // Add one line per new DTO that needs validation:
         // { typeof(CreateProjectDto), projectValidation },
-        public CheckValidationRun(IValidation<CreateUserDto> userValidation)
+        public CheckValidationRun(IValidation<CreateUserDto> userValidation, IValidation<LoginDto> loginValidation)
         {
             _validators = new Dictionary<Type, object>
             {
-                { typeof(CreateUserDto), userValidation }
+                { typeof(CreateUserDto), userValidation },
+                { typeof(LoginDto), loginValidation }
             };
         }
 

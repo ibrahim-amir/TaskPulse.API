@@ -2,48 +2,39 @@ using System.Net;
 using TaskPulse.API.Validation;
 using TaskPulse.API.CommonResponseClass;
 using TaskPulse.API.DTO.UserDto;
-using TaskPulse.API.Entities.EnumForEntities;
-using TaskPulse.API.Helper.ValidationHelper.EmailValidationHelper;
-using TaskPulse.API.Helper.ValidationHelper.PasswordValidationHelper;
 using TaskPulse.API.Helper.ValidationHelper.EntityExistenceValidationHelper;
 using TaskPulse.API.Entities;
 using TaskPulse.API.Helper.EntityFieldNameEnum;
-
+using TaskPulse.API.Validation.InputValidation.UserInputValidation;
 
 public class CreateUserValidation : IValidation<CreateUserDto>
 {
     private readonly EntityExistenceChecker _existance;
-    public CreateUserValidation(EntityExistenceChecker existance)
+    private readonly CreateUserInputValidation _userInputValidation;
+    public CreateUserValidation(EntityExistenceChecker existance, CreateUserInputValidation userInputValidation)
     {
         _existance = existance;
+        _userInputValidation = userInputValidation;
     }
-
 
     public async Task<CommonResponse<CreateUserDto>> Validate(CreateUserDto obj)
     {
+        var inputValidationResult = _userInputValidation.Validate(obj);
         var errors = new List<string>();
 
+        if (!inputValidationResult.IsValid)
+        {
+            errors.AddRange(inputValidationResult.Errors.Select(e => e.ErrorMessage));
+            return CommonResponseFactory.CreateErrorResponse<CreateUserDto>(errors, HttpStatusCode.BadRequest);
+        }
 
-        if (string.IsNullOrWhiteSpace(obj.Name)) errors.Add("Name is required.");
-        if (string.IsNullOrWhiteSpace(obj.Email)) errors.Add("Email is required.");
-        if (string.IsNullOrWhiteSpace(obj.Password)) errors.Add("Password is required.");
-        if (!Enum.IsDefined(typeof(UserRole), obj.Role)) errors.Add($"'{obj.Role}' is not a valid role.");
-
-
-        errors.AddRange(await _existance.CheckFieldsAreUnique(
+        errors.AddRange(await _existance.CheckFieldsAreUnique
+        (
             (typeof(User), Entity.User.Name.ToText(), obj.Name),
             (typeof(User), Entity.User.Email.ToText(), obj.Email)
-            ));
+        ));
 
-        
-        //Password strength validation
-        if (!PasswordStrengthValidator.CheckStrength(obj.Password, out var passwordIssue))
-            errors.Add(passwordIssue);
-
-        if (!EmailValidator.CheckEmail(obj.Email, out var emailIssue))
-            errors.Add(emailIssue);
-
-
+        //Checking fields.
         if (errors.Count > 0)
             return CommonResponseFactory.CreateErrorResponse<CreateUserDto>(errors, HttpStatusCode.BadRequest);
 
