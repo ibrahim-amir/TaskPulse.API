@@ -42,5 +42,53 @@ public enum ActivityAction
     UserRoleChanged,
     UserStatusChanged,
     EmailConfirmed,
-    PasswordReset
+    PasswordReset,
+    ProjectCreated,
+    ProjectUpdated,
+    ProjectDeleted,
+    ProjectMemberAdded,
+    ProjectMemberRemoved,
+    ApprovalRequested,
+    ApprovalApproved,
+    ApprovalRejected,
+    TaskCreated,
+    TaskUpdated,
+    TaskStatusChanged,
+    TaskDeleted,
+    TaskAssigned,
+    TaskUnassigned,
+    TaskClosed,
+    SubtaskAdded,
+    SubtaskRemoved,
+    FileUploaded,
+    CommentAdded,
+    CommentUpdated,
+    CommentDeleted
+}
+
+// What a pending ApprovalRequest is asking permission to do. Every value here
+// needs a matching IApprovalActionHandler, or approving it will fail.
+public enum ApprovalActionType
+{
+    UpdateProject,
+    DeleteProject,
+    RemoveProjectMember
+}
+
+public enum ApprovalStatus
+{
+    Pending,
+    Approved,
+    Rejected
+}
+
+public enum NotificationType
+{
+    TaskAssigned,
+    TaskDueSoon,
+    TaskDeadlineMissed,
+    CommentAdded,
+    AddedToProject,
+    ApprovalRequired,
+    ApprovalResolved
 }

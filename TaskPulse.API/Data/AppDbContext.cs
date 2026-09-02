@@ -17,6 +17,8 @@ public class AppDbContext : DbContext
     public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
+    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
+    public DbSet<TaskSubtask> TaskSubtasks => Set<TaskSubtask>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,16 +28,6 @@ public class AppDbContext : DbContext
         {
             e.HasIndex(u => u.Email).IsUnique();
             e.Property(u => u.Role).HasConversion<string>().HasMaxLength(20);
-
-            // Single hardcoded Admin, per the single-org app design. Login with
-            // this account, then change the password via forgot/reset-password.
-            //
-            // The hash is a literal, not PasswordHelper.HashPassword("..."):
-            // BCrypt salts randomly, so hashing here would produce a different
-            // value on every build and EF would see the model as permanently
-            // changed (PendingModelChangesWarning). Seed data has to be static.
-            // This is BCrypt("ChangeMe123!") — change the password after first
-            // login rather than editing this string.
             e.HasData(new User
             {
                 Id = 1,
@@ -52,6 +44,13 @@ public class AppDbContext : DbContext
         {
             e.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(p => p.Priority).HasConversion<string>().HasMaxLength(20);
+            e.Property(p => p.CreatedByRole).HasConversion<string>().HasMaxLength(20);
+
+
+            e.HasOne(p => p.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(p => p.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<TaskItem>(e =>
@@ -76,6 +75,7 @@ public class AppDbContext : DbContext
         {
             e.HasIndex(pm => new { pm.ProjectId, pm.UserId }).IsUnique();
             e.Property(pm => pm.Role).HasConversion<string>().HasMaxLength(20);
+            e.Property(pm => pm.AssignedByRole).HasConversion<string>().HasMaxLength(20);
 
             e.HasOne(pm => pm.Project)
                 .WithMany(p => p.Members)
@@ -130,12 +130,48 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<TaskSubtask>(e =>
+        {
+            e.Property(s => s.Label).HasMaxLength(200);
+
+            e.HasOne(s => s.Task)
+                .WithMany(t => t.Subtasks)
+                .HasForeignKey(s => s.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(s => s.Attachment)
+                .WithMany()
+                .HasForeignKey(s => s.AttachmentId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
         modelBuilder.Entity<Notification>(e =>
         {
+            e.Property(n => n.Type).HasConversion<string>().HasMaxLength(40);
+
             e.HasOne(n => n.User)
                 .WithMany(u => u.Notifications)
                 .HasForeignKey(n => n.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ApprovalRequest>(e =>
+        {
+            e.Property(a => a.ActionType).HasConversion<string>().HasMaxLength(40);
+            e.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(a => a.TargetEntityType).HasMaxLength(60);
+
+            e.HasIndex(a => a.Status);
+
+            e.HasOne(a => a.RequestedByUser)
+                .WithMany()
+                .HasForeignKey(a => a.RequestedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(a => a.ResolvedByUser)
+                .WithMany()
+                .HasForeignKey(a => a.ResolvedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<ActivityLog>(e =>

@@ -9,6 +9,9 @@ namespace TaskPulse.API.Entities
         public Project Project { get; set; } = null!;
         public int UserId { get; set; }
         public User User { get; set; } = null!;
+
+        // This member's role within this project.
         public UserRole Role { get; set; }
+        public UserRole AssignedByRole { get; set; }
     }
 }

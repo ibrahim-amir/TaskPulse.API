@@ -60,6 +60,61 @@ namespace TaskPulse.API.Migrations
                     b.ToTable("ActivityLogs");
                 });
 
+            modelBuilder.Entity("TaskPulse.API.Entities.ApprovalRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PayloadJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("RequestedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ResolvedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ResolvedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("TargetEntityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TargetEntityType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("ResolvedByUserId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("ApprovalRequests");
+                });
+
             modelBuilder.Entity("TaskPulse.API.Entities.Comment", b =>
                 {
                     b.Property<int>("Id")
@@ -111,9 +166,16 @@ namespace TaskPulse.API.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("RelatedEntityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RelatedEntityType")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Type")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<int>("UserId")
                         .HasColumnType("int");
@@ -135,6 +197,14 @@ namespace TaskPulse.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
@@ -161,6 +231,8 @@ namespace TaskPulse.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedByUserId");
+
                     b.ToTable("Projects");
                 });
 
@@ -171,6 +243,11 @@ namespace TaskPulse.API.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AssignedByRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -254,6 +331,9 @@ namespace TaskPulse.API.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("SubtaskId")
+                        .HasColumnType("int");
+
                     b.Property<int>("TaskId")
                         .HasColumnType("int");
 
@@ -280,6 +360,9 @@ namespace TaskPulse.API.Migrations
                     b.Property<decimal?>("ActualHours")
                         .HasColumnType("decimal(6,2)");
 
+                    b.Property<DateTime?>("CompletedDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -292,8 +375,14 @@ namespace TaskPulse.API.Migrations
                     b.Property<DateTime?>("DueDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("DueSoonNotified")
+                        .HasColumnType("bit");
+
                     b.Property<decimal?>("EstimatedHours")
                         .HasColumnType("decimal(6,2)");
+
+                    b.Property<bool>("OverdueNotified")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Priority")
                         .IsRequired()
@@ -322,6 +411,43 @@ namespace TaskPulse.API.Migrations
                     b.HasIndex("ProjectId");
 
                     b.ToTable("Tasks");
+                });
+
+            modelBuilder.Entity("TaskPulse.API.Entities.TaskSubtask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AttachmentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsUploaded")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("TaskId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UploadedDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttachmentId");
+
+                    b.HasIndex("TaskId");
+
+                    b.ToTable("TaskSubtasks");
                 });
 
             modelBuilder.Entity("TaskPulse.API.Entities.User", b =>
@@ -427,6 +553,24 @@ namespace TaskPulse.API.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TaskPulse.API.Entities.ApprovalRequest", b =>
+                {
+                    b.HasOne("TaskPulse.API.Entities.User", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskPulse.API.Entities.User", "ResolvedByUser")
+                        .WithMany()
+                        .HasForeignKey("ResolvedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("RequestedByUser");
+
+                    b.Navigation("ResolvedByUser");
+                });
+
             modelBuilder.Entity("TaskPulse.API.Entities.Comment", b =>
                 {
                     b.HasOne("TaskPulse.API.Entities.TaskItem", "Task")
@@ -455,6 +599,17 @@ namespace TaskPulse.API.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TaskPulse.API.Entities.Project", b =>
+                {
+                    b.HasOne("TaskPulse.API.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
                 });
 
             modelBuilder.Entity("TaskPulse.API.Entities.ProjectMember", b =>
@@ -533,6 +688,24 @@ namespace TaskPulse.API.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("TaskPulse.API.Entities.TaskSubtask", b =>
+                {
+                    b.HasOne("TaskPulse.API.Entities.TaskAttachment", "Attachment")
+                        .WithMany()
+                        .HasForeignKey("AttachmentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("TaskPulse.API.Entities.TaskItem", "Task")
+                        .WithMany("Subtasks")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Attachment");
+
+                    b.Navigation("Task");
+                });
+
             modelBuilder.Entity("TaskPulse.API.Entities.Project", b =>
                 {
                     b.Navigation("Members");
@@ -547,6 +720,8 @@ namespace TaskPulse.API.Migrations
                     b.Navigation("Attachments");
 
                     b.Navigation("Comments");
+
+                    b.Navigation("Subtasks");
                 });
 
             modelBuilder.Entity("TaskPulse.API.Entities.User", b =>

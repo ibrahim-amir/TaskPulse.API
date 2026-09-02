@@ -9,9 +9,23 @@ using TaskPulse.API.Authentication;
 using TaskPulse.API.Data;
 using TaskPulse.API.DTO.UserDto;
 using TaskPulse.API.ExceptionHandling.ExceptionHandlers;
+using TaskPulse.API.DTO.ProjectDto;
+using TaskPulse.API.DTO.ProjectMemberDto;
+using TaskPulse.API.DTO.TaskDto;
+using TaskPulse.API.Helper.FileHelper;
 using TaskPulse.API.Helper.ValidationHelper.EntityExistenceValidationHelper;
 using TaskPulse.API.Repository.ActivityLogRepo;
+using TaskPulse.API.Repository.ApprovalRepo;
+using TaskPulse.API.Repository.CommentRepo;
+using TaskPulse.API.Repository.DashboardRepo;
+using TaskPulse.API.Repository.NotificationRepo;
+using TaskPulse.API.Repository.ProjectRepo;
+using TaskPulse.API.Repository.TaskRepo;
 using TaskPulse.API.Repository.UserRepo;
+using TaskPulse.API.Services.BackgroundServices;
+using TaskPulse.API.Services.implementations.ApprovalHandlers;
+using TaskPulse.API.Validation.ProjectValidation;
+using TaskPulse.API.Validation.TaskValidation;
 using TaskPulse.API.Services.implementations;
 using TaskPulse.API.Services.interfaces;
 using TaskPulse.API.Validation;
@@ -50,9 +64,47 @@ builder.Services.AddScoped<IValidation<UpdateUserRoleDto>, UpdateUserRoleValidat
 builder.Services.AddScoped<IValidation<UpdateUserStatusDto>, UpdateUserStatusValidation>();
 builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
 builder.Services.AddScoped<IAccountTokenNotifier, AccountTokenNotifier>();
+builder.Services.AddScoped<IValidation<CreateProjectDto>, CreateProjectValidation>();
+builder.Services.AddScoped<IValidation<UpdateProjectDto>, UpdateProjectValidation>();
+builder.Services.AddScoped<IValidation<AddProjectMemberDto>, AddProjectMemberValidation>();
 builder.Services.AddScoped<ActivityLogRepository>();
+builder.Services.AddScoped<NotificationRepository>();
+builder.Services.AddScoped<ProjectRepository>();
+builder.Services.AddScoped<ApprovalRequestRepository>();
 builder.Services.AddScoped<IActivityLogger, ActivityLogger>();
+builder.Services.AddScoped<INotifier, Notifier>();
 builder.Services.AddScoped<IAttendanceService, AttendanceService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<IApprovalGate, ApprovalGate>();
+builder.Services.AddScoped<IApprovalService, ApprovalService>();
+
+// One handler per gated action. ApprovalService receives them all and picks by
+// ActionType — a new gated action means a new handler plus a line here.
+builder.Services.AddScoped<IApprovalActionHandler, UpdateProjectApprovalHandler>();
+builder.Services.AddScoped<IApprovalActionHandler, DeleteProjectApprovalHandler>();
+builder.Services.AddScoped<IApprovalActionHandler, RemoveProjectMemberApprovalHandler>();
+
+builder.Services.AddScoped<IValidation<CreateTaskDto>, CreateTaskValidation>();
+builder.Services.AddScoped<IValidation<UpdateTaskDto>, UpdateTaskValidation>();
+builder.Services.AddScoped<TaskRepository>();
+builder.Services.AddScoped<CommentRepository>();
+builder.Services.AddScoped<DashboardRepository>();
+builder.Services.AddScoped<ITaskService, TaskService>();
+builder.Services.AddScoped<ITaskFileService, TaskFileService>();
+builder.Services.AddScoped<ICommentService, CommentService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IActivityLogService, ActivityLogService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+
+// File upload limits and storage. Singleton because the options are read once
+// from configuration and neither class holds per-request state.
+builder.Services.AddSingleton<FileUploadOptions>();
+builder.Services.AddSingleton<UploadedFileValidator>();
+builder.Services.AddSingleton<FileStorage>();
+
+// Sends the "due soon" and "deadline passed" notifications. Nothing else in the
+// app notices time passing on its own.
+builder.Services.AddHostedService<TaskDeadlineMonitor>();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
@@ -86,3 +138,8 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Top-level statements compile into an internal Program class, which the test
+// project can't reach. This makes it public so WebApplicationFactory<Program>
+// can boot the real app in memory. It adds nothing at runtime.
+public partial class Program { }

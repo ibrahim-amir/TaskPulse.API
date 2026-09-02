@@ -1,4 +1,7 @@
 using TaskPulse.API.CommonResponseClass;
+using TaskPulse.API.DTO.ProjectDto;
+using TaskPulse.API.DTO.ProjectMemberDto;
+using TaskPulse.API.DTO.TaskDto;
 using TaskPulse.API.DTO.UserDto;
 
 namespace TaskPulse.API.Validation
@@ -8,7 +11,7 @@ namespace TaskPulse.API.Validation
         private readonly Dictionary<Type, object> _validators;
 
         // Add one line per new DTO that needs validation:
-        // { typeof(CreateProjectDto), projectValidation },
+        // { typeof(CreateTaskDto), taskValidation },
         public CheckValidationRun(
             IValidation<CreateUserDto> userValidation,
             IValidation<LoginDto> loginValidation,
@@ -19,7 +22,12 @@ namespace TaskPulse.API.Validation
             IValidation<ResetPasswordDto> resetPasswordValidation,
             IValidation<UpdateUserProfileDto> updateUserProfileValidation,
             IValidation<UpdateUserRoleDto> updateUserRoleValidation,
-            IValidation<UpdateUserStatusDto> updateUserStatusValidation)
+            IValidation<UpdateUserStatusDto> updateUserStatusValidation,
+            IValidation<CreateProjectDto> createProjectValidation,
+            IValidation<UpdateProjectDto> updateProjectValidation,
+            IValidation<AddProjectMemberDto> addProjectMemberValidation,
+            IValidation<CreateTaskDto> createTaskValidation,
+            IValidation<UpdateTaskDto> updateTaskValidation)
         {
             _validators = new Dictionary<Type, object>
             {
@@ -32,7 +40,12 @@ namespace TaskPulse.API.Validation
                 { typeof(ResetPasswordDto), resetPasswordValidation },
                 { typeof(UpdateUserProfileDto), updateUserProfileValidation },
                 { typeof(UpdateUserRoleDto), updateUserRoleValidation },
-                { typeof(UpdateUserStatusDto), updateUserStatusValidation }
+                { typeof(UpdateUserStatusDto), updateUserStatusValidation },
+                { typeof(CreateProjectDto), createProjectValidation },
+                { typeof(UpdateProjectDto), updateProjectValidation },
+                { typeof(AddProjectMemberDto), addProjectMemberValidation },
+                { typeof(CreateTaskDto), createTaskValidation },
+                { typeof(UpdateTaskDto), updateTaskValidation }
             };
         }
 

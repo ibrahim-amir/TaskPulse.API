@@ -10,7 +10,7 @@ namespace TaskPulse.API.Entities
         public int UserId { get; set; }
         public User User { get; set; } = null!;
 
-        // Who assigned this — if Admin, a Manager can't remove it without Admin approval.
+        // Who assigned this if Admin, a Manager can't remove it without Admin approval.
         public UserRole AssignedByRole { get; set; }
     }
 }
