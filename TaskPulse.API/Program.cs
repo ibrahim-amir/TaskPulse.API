@@ -45,6 +45,19 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// The Angular dev server runs on its own origin — without this, every
+// request from ng serve is blocked by the browser before it reaches here.
+const string AngularDevClient = "AngularDevClient";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(AngularDevClient, policy =>
+    {
+        policy.WithOrigins("http://localhost:4200", "https://localhost:4200")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly, includeInternalTypes: true);
 builder.Services.AddScoped<EntityExistenceChecker>();
 builder.Services.AddScoped<IUserServices, UserService>();
@@ -133,6 +146,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
+app.UseCors(AngularDevClient);
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
