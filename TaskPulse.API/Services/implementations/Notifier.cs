@@ -14,7 +14,7 @@ namespace TaskPulse.API.Services.implementations
             _notificationRepository = notificationRepository;
         }
 
-        public Task NotifyAsync(int userId, NotificationType type, string message, string? relatedEntityType = null, int? relatedEntityId = null)
+        public async Task<Notification> NotifyAsync(int userId, NotificationType type, string message, string? relatedEntityType = null, int? relatedEntityId = null)
         {
             var notification = new Notification
             {
@@ -25,7 +25,10 @@ namespace TaskPulse.API.Services.implementations
                 RelatedEntityId = relatedEntityId
             };
 
-            return _notificationRepository.CreateAsync(notification);
+            // CreateAsync adds and saves in place, so the same instance has its
+            // generated Id/CreatedAt populated once this completes.
+            await _notificationRepository.CreateAsync(notification);
+            return notification;
         }
 
         public async Task NotifyAdminsAsync(NotificationType type, string message, string? relatedEntityType = null, int? relatedEntityId = null)

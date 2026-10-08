@@ -23,7 +23,8 @@ namespace TaskPulse.API.Repository.TaskRepo
             return _db.Tasks
                 .Include(t => t.Assignments)
                 .Include(t => t.Subtasks)
-                    .ThenInclude(s => s.Attachment);
+                    .ThenInclude(s => s.Attachment)
+                .Include(t => t.TodoItems);
         }
 
         public async Task CreateAsync(TaskItem task)
@@ -35,6 +36,18 @@ namespace TaskPulse.API.Repository.TaskRepo
         public async Task<TaskItem?> GetByIdAsync(int id)
         {
             return await TasksWithDetail().FirstOrDefaultAsync(t => t.Id == id);
+        }
+
+        // Every task in a project with its assignees' names loaded — what the
+        // AI summary/risk-detection prompts are built from. Not part of
+        // TasksWithDetail() since nothing else needs assignee names eagerly.
+        public async Task<List<TaskItem>> GetAllForProjectWithAssigneesAsync(int projectId)
+        {
+            return await _db.Tasks
+                .Include(t => t.Assignments).ThenInclude(a => a.User)
+                .Where(t => t.ProjectId == projectId)
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task UpdateAsync(TaskItem task)
@@ -199,6 +212,31 @@ namespace TaskPulse.API.Repository.TaskRepo
 
             var uploaded = await _db.TaskSubtasks.CountAsync(s => s.TaskId == taskId && s.IsUploaded);
             return uploaded == total;
+        }
+
+        // --- Todo items (a separate, self-ticked checklist — no files) ---
+
+        public async Task AddTodoAsync(TaskTodoItem todo)
+        {
+            await _db.TaskTodoItems.AddAsync(todo);
+            await _db.SaveChangesAsync();
+        }
+
+        public async Task<TaskTodoItem?> GetTodoAsync(int todoId)
+        {
+            return await _db.TaskTodoItems.FirstOrDefaultAsync(t => t.Id == todoId);
+        }
+
+        public async Task UpdateTodoAsync(TaskTodoItem todo)
+        {
+            _db.TaskTodoItems.Update(todo);
+            await _db.SaveChangesAsync();
+        }
+
+        public async Task RemoveTodoAsync(TaskTodoItem todo)
+        {
+            _db.TaskTodoItems.Remove(todo);
+            await _db.SaveChangesAsync();
         }
 
         // --- Attachments ---

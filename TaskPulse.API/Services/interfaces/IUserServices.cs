@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using TaskPulse.API.CommonResponseClass;
 using TaskPulse.API.DTO.PagingDto;
 using TaskPulse.API.DTO.UserDto;
@@ -14,9 +15,18 @@ namespace TaskPulse.API.Services.interfaces
 
         public Task<CommonResponse<UserDTO>> UpdateUserProfileAsync(UpdateUserProfileDto dto);
 
+        // Self-or-admin, same as UpdateUserProfileAsync — checked by the controller.
+        public Task<CommonResponse<UserDTO>> UpdateAvatarAsync(int userId, IFormFile file);
+
         public Task<CommonResponse<UserDTO>> UpdateUserRoleAsync(UpdateUserRoleDto dto);
 
         public Task<CommonResponse<UserDTO>> SetUserStatusAsync(UpdateUserStatusDto dto);
+
+        // A real row delete — only succeeds when the account has no history
+        // that would either block it (SQL Restrict) or disappear with it
+        // (comments, uploads, approvals). Use SetUserStatusAsync to disable
+        // an account with real activity instead.
+        public Task<CommonResponse<string>> DeleteUserAsync(int id, int callerId);
 
         public Task<CommonResponse<AuthResponseDto>> LoginAsync(LoginDto dto);
 
@@ -31,5 +41,7 @@ namespace TaskPulse.API.Services.interfaces
         public Task<CommonResponse<string>> ForgotPasswordAsync(ForgotPasswordDto dto);
 
         public Task<CommonResponse<string>> ResetPasswordAsync(ResetPasswordDto dto);
+
+        public Task<CommonResponse<string>> ChangePasswordAsync(ChangePasswordDto dto);
     }
 }

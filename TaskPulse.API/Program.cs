@@ -20,6 +20,7 @@ using TaskPulse.API.Repository.CommentRepo;
 using TaskPulse.API.Repository.DashboardRepo;
 using TaskPulse.API.Repository.NotificationRepo;
 using TaskPulse.API.Repository.ProjectRepo;
+using TaskPulse.API.Repository.TaskApprovalRepo;
 using TaskPulse.API.Repository.TaskRepo;
 using TaskPulse.API.Repository.UserRepo;
 using TaskPulse.API.Services.BackgroundServices;
@@ -30,6 +31,12 @@ using TaskPulse.API.Services.implementations;
 using TaskPulse.API.Services.interfaces;
 using TaskPulse.API.Validation;
 using TaskPulse.API.Validation.UserValidation;
+
+// Must exist before WebApplication.CreateBuilder runs — that's where the
+// static file provider binds to wwwroot, and it falls back to a null
+// provider for the app's whole lifetime if the folder isn't there yet.
+Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars"));
+Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "chat-images"));
 
 var builder = WebApplication.CreateBuilder(args);
 Log.Logger = new LoggerConfiguration()
@@ -45,14 +52,16 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// The Angular dev server runs on its own origin — without this, every
-// request from ng serve is blocked by the browser before it reaches here.
+// The frontend dev server runs on its own origin — without this, every
+// request from it is blocked by the browser before it reaches here.
 const string AngularDevClient = "AngularDevClient";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(AngularDevClient, policy =>
     {
-        policy.WithOrigins("http://localhost:4200", "https://localhost:4200")
+        policy.WithOrigins(
+                  "http://localhost:4200", "https://localhost:4200",
+                  "http://localhost:3000", "https://localhost:3000")
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -75,7 +84,8 @@ builder.Services.AddScoped<IValidation<ResetPasswordDto>, ResetPasswordValidatio
 builder.Services.AddScoped<IValidation<UpdateUserProfileDto>, UpdateUserProfileValidation>();
 builder.Services.AddScoped<IValidation<UpdateUserRoleDto>, UpdateUserRoleValidation>();
 builder.Services.AddScoped<IValidation<UpdateUserStatusDto>, UpdateUserStatusValidation>();
-builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
+builder.Services.AddScoped<IValidation<ChangePasswordDto>, ChangePasswordValidation>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IAccountTokenNotifier, AccountTokenNotifier>();
 builder.Services.AddScoped<IValidation<CreateProjectDto>, CreateProjectValidation>();
 builder.Services.AddScoped<IValidation<UpdateProjectDto>, UpdateProjectValidation>();
@@ -96,10 +106,17 @@ builder.Services.AddScoped<IApprovalService, ApprovalService>();
 builder.Services.AddScoped<IApprovalActionHandler, UpdateProjectApprovalHandler>();
 builder.Services.AddScoped<IApprovalActionHandler, DeleteProjectApprovalHandler>();
 builder.Services.AddScoped<IApprovalActionHandler, RemoveProjectMemberApprovalHandler>();
+builder.Services.AddScoped<IApprovalActionHandler, CompleteTaskApprovalHandler>();
+builder.Services.AddScoped<IApprovalActionHandler, AssignTaskRequestApprovalHandler>();
+builder.Services.AddScoped<IApprovalActionHandler, UpdateTaskApprovalHandler>();
+builder.Services.AddScoped<IApprovalActionHandler, AssignBusyUserApprovalHandler>();
+builder.Services.AddScoped<IApprovalActionHandler, DeleteTaskApprovalHandler>();
+builder.Services.AddScoped<IApprovalActionHandler, DuplicateTaskApprovalHandler>();
 
 builder.Services.AddScoped<IValidation<CreateTaskDto>, CreateTaskValidation>();
 builder.Services.AddScoped<IValidation<UpdateTaskDto>, UpdateTaskValidation>();
 builder.Services.AddScoped<TaskRepository>();
+builder.Services.AddScoped<TaskApprovalRequestRepository>();
 builder.Services.AddScoped<CommentRepository>();
 builder.Services.AddScoped<DashboardRepository>();
 builder.Services.AddScoped<ITaskService, TaskService>();
@@ -108,6 +125,12 @@ builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IActivityLogService, ActivityLogService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+
+// AI features (project summary, risk detection, in-app help) all go through
+// Gemini via this one typed HttpClient.
+builder.Services.AddHttpClient<GeminiClient>();
+builder.Services.AddScoped<IAiInsightsService, AiInsightsService>();
+builder.Services.AddScoped<IHelpAssistantService, HelpAssistantService>();
 
 // File upload limits and storage. Singleton because the options are read once
 // from configuration and neither class holds per-request state.
@@ -147,6 +170,9 @@ if (app.Environment.IsDevelopment())
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
 app.UseCors(AngularDevClient);
+// Avatars are served straight off disk — low-sensitivity, so no auth/controller
+// needed for a plain <img src> to work.
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

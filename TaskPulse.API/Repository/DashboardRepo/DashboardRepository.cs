@@ -35,6 +35,16 @@ namespace TaskPulse.API.Repository.DashboardRepo
             return await projects.CountAsync();
         }
 
+        public async Task<int> CountProjectsByStatusAsync(List<int>? visibleProjectIds, ProjectStatus status)
+        {
+            var projects = _db.Projects.AsNoTracking().Where(p => p.Status == status);
+
+            if (visibleProjectIds is not null)
+                projects = projects.Where(p => visibleProjectIds.Contains(p.Id));
+
+            return await projects.CountAsync();
+        }
+
         public async Task<int> CountTasksAsync(List<int>? visibleProjectIds, int? projectId = null)
         {
             var tasks = ScopedTasks(visibleProjectIds);
@@ -178,6 +188,19 @@ namespace TaskPulse.API.Repository.DashboardRepo
         public async Task<int> CountPendingApprovalsAsync()
         {
             return await _db.ApprovalRequests.CountAsync(a => a.Status == ApprovalStatus.Pending);
+        }
+
+        // Raw (priority, status, count) triples for whatever combinations
+        // actually have tasks — the caller fills in the zero cells for
+        // combinations that don't.
+        public async Task<List<(PriorityLevel Priority, TaskItemStatus Status, int Count)>> GetPriorityStatusCountsAsync(List<int>? visibleProjectIds)
+        {
+            var rows = await ScopedTasks(visibleProjectIds)
+                .GroupBy(t => new { t.Priority, t.Status })
+                .Select(g => new { g.Key.Priority, g.Key.Status, Count = g.Count() })
+                .ToListAsync();
+
+            return rows.Select(r => (r.Priority, r.Status, r.Count)).ToList();
         }
     }
 

@@ -13,6 +13,16 @@ namespace TaskPulse.API.Entities
         public bool IsDisabled { get; set; } = false;
         public UserRole Role { get; set; } = UserRole.Member;
 
+        // Self-reported ("I'm free to take on work" vs "don't add to my
+        // plate"). A Manager assigning a busy user needs that user's (or an
+        // Admin's) go-ahead first — see AssignBusyUserApprovalHandler.
+        public bool IsAvailableForAssignment { get; set; } = true;
+
+        // True for an Admin-provisioned account until the user sets their own
+        // password via POST /api/auth/change-password. Never set for accounts
+        // that already exist when this shipped — only new CreateUserAsync calls.
+        public bool MustChangePassword { get; set; } = false;
+
         public bool IsEmailConfirmed { get; set; } = false;
         public string? EmailConfirmationTokenHash { get; set; }
         public DateTime? EmailConfirmationTokenExpiresAt { get; set; }

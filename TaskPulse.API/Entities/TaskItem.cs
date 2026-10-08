@@ -37,5 +37,8 @@ namespace TaskPulse.API.Entities
 
         // The required file checklist. Progress is uploaded / total across these.
         public ICollection<TaskSubtask> Subtasks { get; set; } = new List<TaskSubtask>();
+
+        // A separate, self-ticked checklist — no files involved.
+        public ICollection<TaskTodoItem> TodoItems { get; set; } = new List<TaskTodoItem>();
     }
 }

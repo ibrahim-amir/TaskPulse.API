@@ -18,6 +18,10 @@ public class CreateTaskInputValidation : AbstractValidator<CreateTaskDto>
             .MaximumLength(4000).WithMessage("Description cannot exceed 4000 characters.")
             .When(x => !string.IsNullOrWhiteSpace(x.Description));
 
+        RuleFor(x => x.DueDate)
+            .GreaterThanOrEqualTo(_ => DateTime.UtcNow.Date).WithMessage("Due date cannot be in the past.")
+            .When(x => x.DueDate.HasValue);
+
         RuleFor(x => x.EstimatedHours)
             .GreaterThan(0).WithMessage("Estimated hours must be greater than zero.")
             .LessThanOrEqualTo(9999).WithMessage("Estimated hours is unrealistically large.")

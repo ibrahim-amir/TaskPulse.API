@@ -45,6 +45,7 @@ namespace TaskPulse.API.Services.implementations
                 var summary = new DashboardSummaryDto
                 {
                     ProjectCount = await _dashboardRepository.CountProjectsAsync(scope),
+                    ActiveProjectCount = await _dashboardRepository.CountProjectsByStatusAsync(scope, ProjectStatus.Active),
                     TaskCount = await _dashboardRepository.CountTasksAsync(scope),
                     CompletedTaskCount = await _dashboardRepository.CountTasksByStatusAsync(scope, TaskItemStatus.Done),
                     OverdueTaskCount = await _dashboardRepository.CountOverdueTasksAsync(scope),
@@ -133,6 +134,7 @@ namespace TaskPulse.API.Services.implementations
                 var (estimated, actual) = await _dashboardRepository.SumHoursAsync(scope);
                 var (onTrack, atRisk, late, noDueDate) = await _dashboardRepository.CountDeadlineHealthAsync(scope);
                 var projects = await _dashboardRepository.GetProjectsAsync(scope);
+                var priorityStatusCounts = await _dashboardRepository.GetPriorityStatusCountsAsync(scope);
 
                 var report = new ProgressReportDto
                 {
@@ -145,7 +147,8 @@ namespace TaskPulse.API.Services.implementations
                         AtRisk = atRisk,
                         Late = late,
                         NoDueDate = noDueDate
-                    }
+                    },
+                    PriorityStatusMatrix = ToPriorityStatusMatrix(priorityStatusCounts)
                 };
 
                 foreach (var project in projects)
@@ -153,6 +156,8 @@ namespace TaskPulse.API.Services.implementations
                     var taskCount = await _dashboardRepository.CountTasksAsync(null, project.Id);
                     var completed = await _dashboardRepository.CountTasksByStatusAsync(null, TaskItemStatus.Done, project.Id);
                     var (projectEstimated, projectActual) = await _dashboardRepository.SumHoursAsync(null, project.Id);
+                    var (projectOnTrack, projectAtRisk, projectLate, projectNoDueDate) =
+                        await _dashboardRepository.CountDeadlineHealthAsync(new List<int> { project.Id });
 
                     report.Projects.Add(new ProjectProgressDto
                     {
@@ -163,7 +168,14 @@ namespace TaskPulse.API.Services.implementations
                         CompletionPercent = Percent(completed, taskCount),
                         OverdueTaskCount = await _dashboardRepository.CountOverdueTasksAsync(null, project.Id),
                         EstimatedHours = projectEstimated,
-                        ActualHours = projectActual
+                        ActualHours = projectActual,
+                        DeadlineHealth = new DeadlineHealthDto
+                        {
+                            OnTrack = projectOnTrack,
+                            AtRisk = projectAtRisk,
+                            Late = projectLate,
+                            NoDueDate = projectNoDueDate
+                        }
                     });
                 }
 
@@ -209,6 +221,22 @@ namespace TaskPulse.API.Services.implementations
         private static int Percent(int part, int total)
         {
             return total == 0 ? 0 : (int)Math.Round(part * 100.0 / total);
+        }
+
+        // Every (priority, status) combination, zero-filled — a heatmap grid
+        // needs a stable cell count even where nothing exists yet.
+        private static List<PriorityStatusCellDto> ToPriorityStatusMatrix(List<(PriorityLevel Priority, TaskItemStatus Status, int Count)> counts)
+        {
+            var lookup = counts.ToDictionary(c => (c.Priority, c.Status), c => c.Count);
+
+            return Enum.GetValues<PriorityLevel>()
+                .SelectMany(priority => Enum.GetValues<TaskItemStatus>().Select(status => new PriorityStatusCellDto
+                {
+                    Priority = priority.ToString(),
+                    Status = status.ToString(),
+                    Count = lookup.TryGetValue((priority, status), out var count) ? count : 0
+                }))
+                .ToList();
         }
     }
 }

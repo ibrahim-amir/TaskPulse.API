@@ -11,4 +11,8 @@ public class UpdateUserProfileDto
 
     public string Name { get; set; } = string.Empty;
     public string? profileImageUrl { get; set; }
+
+    // Self-service — whether a Manager can assign this user to a task
+    // without needing anyone's approval first.
+    public bool IsAvailableForAssignment { get; set; } = true;
 }

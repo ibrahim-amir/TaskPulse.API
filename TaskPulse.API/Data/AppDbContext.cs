@@ -19,6 +19,9 @@ public class AppDbContext : DbContext
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
     public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
     public DbSet<TaskSubtask> TaskSubtasks => Set<TaskSubtask>();
+    public DbSet<TaskTodoItem> TaskTodoItems => Set<TaskTodoItem>();
+    public DbSet<TaskApprovalRequest> TaskApprovalRequests => Set<TaskApprovalRequest>();
+    public DbSet<TaskApprovalResponse> TaskApprovalResponses => Set<TaskApprovalResponse>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -171,6 +174,40 @@ public class AppDbContext : DbContext
             e.HasOne(a => a.ResolvedByUser)
                 .WithMany()
                 .HasForeignKey(a => a.ResolvedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TaskApprovalRequest>(e =>
+        {
+            e.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+
+            e.HasIndex(r => new { r.TaskId, r.Status });
+
+            e.HasOne(r => r.Task)
+                .WithMany()
+                .HasForeignKey(r => r.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(r => r.RequestedByUser)
+                .WithMany()
+                .HasForeignKey(r => r.RequestedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TaskApprovalResponse>(e =>
+        {
+            e.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+
+            e.HasIndex(r => new { r.TaskApprovalRequestId, r.ApproverUserId }).IsUnique();
+
+            e.HasOne(r => r.TaskApprovalRequest)
+                .WithMany(r => r.Responses)
+                .HasForeignKey(r => r.TaskApprovalRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(r => r.ApproverUser)
+                .WithMany()
+                .HasForeignKey(r => r.ApproverUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

@@ -16,5 +16,21 @@ namespace TaskPulse.API.Services.interfaces
         Task<CommonResponse<NotificationDTO>> MarkReadAsync(int id, int callerId);
 
         Task<CommonResponse<int>> MarkAllReadAsync(int callerId);
+
+        // The one write this service exposes — a manual, user-composed
+        // notification (e.g. from a profile page), not a system-raised one.
+        Task<CommonResponse<NotificationDTO>> SendAsync(SendNotificationDto dto, int senderId);
+
+        Task<CommonResponse<string>> DeleteAsync(int id, int callerId);
+
+        Task<CommonResponse<int>> ClearAllAsync(int callerId);
+
+        Task<CommonResponse<List<NotificationDTO>>> GetConversationAsync(int callerId, int otherUserId);
+
+        // Deletes only the caller's own copy of the conversation — the other
+        // person still sees theirs until they clear it too.
+        Task<CommonResponse<int>> ClearConversationAsync(int callerId, int otherUserId);
+
+        Task<CommonResponse<List<ConversationSummaryDto>>> GetConversationsAsync(int callerId);
     }
 }

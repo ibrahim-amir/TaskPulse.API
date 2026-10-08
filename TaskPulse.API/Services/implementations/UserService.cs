@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Http;
 using TaskPulse.API.CommonResponseClass;
 using TaskPulse.API.CommonResponseMessages;
 using TaskPulse.API.CommonResponseMessageExtensions;
@@ -12,6 +13,7 @@ using TaskPulse.API.Services.Infrastructure;
 using TaskPulse.API.Validation;
 using TaskPulse.API.Repository.UserRepo;
 using TaskPulse.API.Authentication;
+using TaskPulse.API.Helper.FileHelper;
 using TaskPulse.API.Helper.PasswordHelperClass;
 using TaskPulse.API.Helper.TokenHelperClass;
 
@@ -24,6 +26,8 @@ namespace TaskPulse.API.Services.implementations
         private readonly TokenService _tokenService;
         private readonly IAccountTokenNotifier _accountTokenNotifier;
         private readonly IActivityLogger _activityLogger;
+        private readonly FileStorage _fileStorage;
+        private readonly UploadedFileValidator _fileValidator;
 
         public UserService(
             CustomExceptionHandler customExceptionHandler,
@@ -31,7 +35,9 @@ namespace TaskPulse.API.Services.implementations
             UserRepository userRepository,
             TokenService tokenService,
             IAccountTokenNotifier accountTokenNotifier,
-            IActivityLogger activityLogger)
+            IActivityLogger activityLogger,
+            FileStorage fileStorage,
+            UploadedFileValidator fileValidator)
             : base(customExceptionHandler)
         {
             _validationRunner = validationRunner;
@@ -39,6 +45,8 @@ namespace TaskPulse.API.Services.implementations
             _tokenService = tokenService;
             _accountTokenNotifier = accountTokenNotifier;
             _activityLogger = activityLogger;
+            _fileStorage = fileStorage;
+            _fileValidator = fileValidator;
         }
 
 
@@ -59,6 +67,10 @@ namespace TaskPulse.API.Services.implementations
                 // Creating a User Entity from the DTO.
                 var user = User.CreateUserFromDto(dto);
                 user.PasswordHash = PasswordHelper.HashPassword(dto.Password); // Creating a password Hash to store.
+
+                // Admin set this password directly (there's no self-signup), so
+                // treat it as temporary until the user changes it themselves.
+                user.MustChangePassword = true;
 
                 var confirmationToken = _accountTokenNotifier.IssueEmailConfirmationToken(user);
                 await _userRepository.CreateUserAsync(user);
@@ -130,10 +142,40 @@ namespace TaskPulse.API.Services.implementations
 
                 user.Name = dto.Name;
                 user.profileImageUrl = dto.profileImageUrl;
+                user.IsAvailableForAssignment = dto.IsAvailableForAssignment;
                 await _userRepository.UpdateUserAsync(user);
                 await _activityLogger.LogAsync(user.Id, ActivityAction.UserProfileUpdated, "Profile updated.");
 
                 return CommonResponseFactory.CreateSuccessResponse(UserDTO.CreateUserDtoFromUserEntity(user), "Profile updated.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Update Avatar Service Method — stores the file under wwwroot/avatars
+        // (served as a plain static URL) and points profileImageUrl at it.
+        public async Task<CommonResponse<UserDTO>> UpdateAvatarAsync(int userId, IFormFile file)
+        {
+            var response = new CommonResponse<UserDTO>();
+
+            try
+            {
+                var fileErrors = _fileValidator.ValidateImage(file);
+                if (fileErrors.Count > 0)
+                    return CommonResponseFactory.CreateErrorResponse<UserDTO>(fileErrors, HttpStatusCode.BadRequest);
+
+                var user = await _userRepository.GetByIdAsync(userId);
+                if (user is null)
+                    return CommonResponseFactory.CreateErrorResponse<UserDTO>("User not found.", HttpStatusCode.NotFound);
+
+                user.profileImageUrl = await _fileStorage.SaveAvatarAsync(file!, userId);
+                await _userRepository.UpdateUserAsync(user);
+                await _activityLogger.LogAsync(user.Id, ActivityAction.UserProfileUpdated, "Profile picture updated.");
+
+                return CommonResponseFactory.CreateSuccessResponse(UserDTO.CreateUserDtoFromUserEntity(user), "Avatar updated.");
             }
             catch (Exception ex)
             {
@@ -201,6 +243,45 @@ namespace TaskPulse.API.Services.implementations
                 await _activityLogger.LogAsync(user.Id,ActivityAction.UserStatusChanged,dto.IsDisabled ? "Account disabled." : "Account enabled.");
 
                 return CommonResponseFactory.CreateSuccessResponse(UserDTO.CreateUserDtoFromUserEntity(user),dto.IsDisabled ? "Account disabled." : "Account enabled.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Delete User Service Method — a real row delete, distinct from
+        // SetUserStatusAsync(IsDisabled: true). Only proceeds when the account
+        // has no history; otherwise the caller is told exactly what's in the
+        // way and pointed at disabling instead.
+        public async Task<CommonResponse<string>> DeleteUserAsync(int id, int callerId)
+        {
+            var response = new CommonResponse<string>();
+
+            try
+            {
+                if (id == callerId)
+                    return CommonResponseFactory.CreateErrorResponse<string>("You can't delete your own account.", HttpStatusCode.BadRequest);
+
+                var user = await _userRepository.GetByIdAsync(id);
+                if (user is null)
+                    return CommonResponseFactory.CreateErrorResponse<string>("User not found.", HttpStatusCode.NotFound);
+
+                if (user.Role == UserRole.Admin && await _userRepository.CountActiveAdminsAsync() <= 1)
+                    return CommonResponseFactory.CreateErrorResponse<string>(
+                        "This is the last active Admin — promote another user to Admin first.", HttpStatusCode.BadRequest);
+
+                var blockers = await _userRepository.GetDeletionBlockersAsync(id);
+                if (blockers.Count > 0)
+                    return CommonResponseFactory.CreateErrorResponse<string>(
+                        $"Can't delete — this account has {string.Join(", ", blockers)}. Disable it instead.",
+                        HttpStatusCode.BadRequest);
+
+                await _userRepository.DeleteAsync(user);
+                await _activityLogger.LogAsync(callerId, ActivityAction.UserDeleted, $"Deleted user {user.Email}.");
+
+                return CommonResponseFactory.CreateSuccessResponse("User deleted.", "User deleted.");
             }
             catch (Exception ex)
             {
@@ -404,6 +485,37 @@ namespace TaskPulse.API.Services.implementations
                 await _activityLogger.LogAsync(user.Id, ActivityAction.PasswordReset, "Password reset.");
 
                 return CommonResponseFactory.CreateSuccessResponse("Password reset.", "Your password has been reset. Please log in again.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Change Password Service Method — the logged-in-user path (current
+        // password required), distinct from ResetPasswordAsync's forgot-password
+        // token path. Also how MustChangePassword gets cleared.
+        public async Task<CommonResponse<string>> ChangePasswordAsync(ChangePasswordDto dto)
+        {
+            var response = new CommonResponse<string>();
+
+            try
+            {
+                var validation = await _validationRunner.Run(dto);
+                if (!validation.Success)
+                    return CommonResponseFactory.CreateErrorResponse<string>(validation.Errors, validation.StatusCode);
+
+                var user = await _userRepository.GetByIdAsync(dto.Id);
+                if (user is null)
+                    return CommonResponseFactory.CreateErrorResponse<string>("User not found.", HttpStatusCode.NotFound);
+
+                user.PasswordHash = PasswordHelper.HashPassword(dto.NewPassword);
+                user.MustChangePassword = false;
+                await _userRepository.UpdateUserAsync(user);
+                await _activityLogger.LogAsync(user.Id, ActivityAction.PasswordReset, "Password changed.");
+
+                return CommonResponseFactory.CreateSuccessResponse("Password changed.", "Your password has been changed.");
             }
             catch (Exception ex)
             {

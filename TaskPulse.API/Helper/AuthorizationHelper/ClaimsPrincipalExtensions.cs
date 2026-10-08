@@ -30,6 +30,11 @@ namespace TaskPulse.API.Helper.AuthorizationHelper
             return user.IsInRole(nameof(UserRole.Admin));
         }
 
+        public static string GetRole(this ClaimsPrincipal user)
+        {
+            return user.FindFirstValue(ClaimTypes.Role) ?? nameof(UserRole.Member);
+        }
+
         // The Admin reaches any user record, everyone else only their own.
         public static bool CanAccessUser(this ClaimsPrincipal user, int userId)
         {

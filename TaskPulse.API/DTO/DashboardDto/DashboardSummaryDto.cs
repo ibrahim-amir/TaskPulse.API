@@ -5,6 +5,7 @@ namespace TaskPulse.API.DTO.DashboardDto;
 public class DashboardSummaryDto
 {
     public int ProjectCount { get; set; }
+    public int ActiveProjectCount { get; set; }
     public int TaskCount { get; set; }
     public int CompletedTaskCount { get; set; }
     public int OverdueTaskCount { get; set; }

@@ -16,7 +16,8 @@ public class CreateProjectInputValidation : AbstractValidator<CreateProjectDto>
             .When(x => !string.IsNullOrWhiteSpace(x.Description));
 
         RuleFor(x => x.StartDate)
-            .NotEmpty().WithMessage("Start date is required.");
+            .NotEmpty().WithMessage("Start date is required.")
+            .GreaterThanOrEqualTo(_ => DateTime.UtcNow.Date).WithMessage("Start date cannot be in the past.");
 
         RuleFor(x => x.EndDate)
             .GreaterThanOrEqualTo(x => x.StartDate).WithMessage("End date cannot be before the start date.")

@@ -6,10 +6,12 @@ namespace TaskPulse.API.Helper.FileHelper
     public class FileStorage
     {
         private readonly FileUploadOptions _options;
+        private readonly IWebHostEnvironment _env;
 
-        public FileStorage(FileUploadOptions options)
+        public FileStorage(FileUploadOptions options, IWebHostEnvironment env)
         {
             _options = options;
+            _env = env;
         }
 
         // Saves under uploads/tasks/{taskId}/ with a generated name, so two
@@ -28,6 +30,44 @@ namespace TaskPulse.API.Helper.FileHelper
             await file.CopyToAsync(stream);
 
             return fullPath;
+        }
+
+        // Avatars live under wwwroot so ASP.NET's static file middleware can
+        // serve them directly at /avatars/{name} — no controller, no auth
+        // header needed, so a plain <img src> just works. Named with the
+        // user's id so a stale reference is easy to spot while debugging.
+        public async Task<string> SaveAvatarAsync(IFormFile file, int userId)
+        {
+            var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
+            var folder = Path.Combine(webRoot, "avatars");
+            Directory.CreateDirectory(folder);
+
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var storedName = $"{userId}-{Guid.NewGuid():N}{extension}";
+            var fullPath = Path.Combine(folder, storedName);
+
+            await using var stream = new FileStream(fullPath, FileMode.Create);
+            await file.CopyToAsync(stream);
+
+            return $"/avatars/{storedName}";
+        }
+
+        // Same idea as SaveAvatarAsync — a plain static URL, no auth needed to
+        // view it inline in a chat bubble.
+        public async Task<string> SaveChatImageAsync(IFormFile file, int senderId)
+        {
+            var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
+            var folder = Path.Combine(webRoot, "chat-images");
+            Directory.CreateDirectory(folder);
+
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var storedName = $"{senderId}-{Guid.NewGuid():N}{extension}";
+            var fullPath = Path.Combine(folder, storedName);
+
+            await using var stream = new FileStream(fullPath, FileMode.Create);
+            await file.CopyToAsync(stream);
+
+            return $"/chat-images/{storedName}";
         }
 
         // Used when a reupload replaces a file. A missing file isn't an error —

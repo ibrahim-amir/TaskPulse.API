@@ -159,6 +159,12 @@ namespace TaskPulse.API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsOutgoing")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsRead")
                         .HasColumnType("bit");
 
@@ -271,6 +277,81 @@ namespace TaskPulse.API.Migrations
                         .IsUnique();
 
                     b.ToTable("ProjectMembers");
+                });
+
+            modelBuilder.Entity("TaskPulse.API.Entities.TaskApprovalRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("RequestedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ResolvedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("TaskId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("TaskId", "Status");
+
+                    b.ToTable("TaskApprovalRequests");
+                });
+
+            modelBuilder.Entity("TaskPulse.API.Entities.TaskApprovalResponse", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ApproverUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("RespondedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("TaskApprovalRequestId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApproverUserId");
+
+                    b.HasIndex("TaskApprovalRequestId", "ApproverUserId")
+                        .IsUnique();
+
+                    b.ToTable("TaskApprovalResponses");
                 });
 
             modelBuilder.Entity("TaskPulse.API.Entities.TaskAssignment", b =>
@@ -450,6 +531,34 @@ namespace TaskPulse.API.Migrations
                     b.ToTable("TaskSubtasks");
                 });
 
+            modelBuilder.Entity("TaskPulse.API.Entities.TaskTodoItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDone")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("TaskId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId");
+
+                    b.ToTable("TaskTodoItems");
+                });
+
             modelBuilder.Entity("TaskPulse.API.Entities.User", b =>
                 {
                     b.Property<int>("Id")
@@ -471,10 +580,16 @@ namespace TaskPulse.API.Migrations
                     b.Property<string>("EmailConfirmationTokenHash")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("IsAvailableForAssignment")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsDisabled")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsEmailConfirmed")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("MustChangePassword")
                         .HasColumnType("bit");
 
                     b.Property<string>("Name")
@@ -521,8 +636,10 @@ namespace TaskPulse.API.Migrations
                             Id = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "admin@taskpulse.local",
+                            IsAvailableForAssignment = true,
                             IsDisabled = false,
                             IsEmailConfirmed = true,
+                            MustChangePassword = false,
                             Name = "Admin",
                             PasswordHash = "$2a$11$Jq4mIC9S3KdDM17V8AZvKOxW0Ljd4eicGvHgRRe0KzxMbqUjZXn.m",
                             RefreshTokenRememberMe = false,
@@ -631,6 +748,44 @@ namespace TaskPulse.API.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TaskPulse.API.Entities.TaskApprovalRequest", b =>
+                {
+                    b.HasOne("TaskPulse.API.Entities.User", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskPulse.API.Entities.TaskItem", "Task")
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RequestedByUser");
+
+                    b.Navigation("Task");
+                });
+
+            modelBuilder.Entity("TaskPulse.API.Entities.TaskApprovalResponse", b =>
+                {
+                    b.HasOne("TaskPulse.API.Entities.User", "ApproverUser")
+                        .WithMany()
+                        .HasForeignKey("ApproverUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskPulse.API.Entities.TaskApprovalRequest", "TaskApprovalRequest")
+                        .WithMany("Responses")
+                        .HasForeignKey("TaskApprovalRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ApproverUser");
+
+                    b.Navigation("TaskApprovalRequest");
+                });
+
             modelBuilder.Entity("TaskPulse.API.Entities.TaskAssignment", b =>
                 {
                     b.HasOne("TaskPulse.API.Entities.TaskItem", "Task")
@@ -706,11 +861,27 @@ namespace TaskPulse.API.Migrations
                     b.Navigation("Task");
                 });
 
+            modelBuilder.Entity("TaskPulse.API.Entities.TaskTodoItem", b =>
+                {
+                    b.HasOne("TaskPulse.API.Entities.TaskItem", "Task")
+                        .WithMany("TodoItems")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Task");
+                });
+
             modelBuilder.Entity("TaskPulse.API.Entities.Project", b =>
                 {
                     b.Navigation("Members");
 
                     b.Navigation("Tasks");
+                });
+
+            modelBuilder.Entity("TaskPulse.API.Entities.TaskApprovalRequest", b =>
+                {
+                    b.Navigation("Responses");
                 });
 
             modelBuilder.Entity("TaskPulse.API.Entities.TaskItem", b =>
@@ -722,6 +893,8 @@ namespace TaskPulse.API.Migrations
                     b.Navigation("Comments");
 
                     b.Navigation("Subtasks");
+
+                    b.Navigation("TodoItems");
                 });
 
             modelBuilder.Entity("TaskPulse.API.Entities.User", b =>

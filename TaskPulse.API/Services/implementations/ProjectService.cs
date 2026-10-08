@@ -2,6 +2,7 @@ using System.Net;
 using TaskPulse.API.CommonResponseClass;
 using TaskPulse.API.CommonResponseMessages;
 using TaskPulse.API.CommonResponseMessageExtensions;
+using TaskPulse.API.DTO.ApprovalDto;
 using TaskPulse.API.DTO.PagingDto;
 using TaskPulse.API.DTO.ProjectDto;
 using TaskPulse.API.DTO.ProjectMemberDto;
@@ -9,6 +10,7 @@ using TaskPulse.API.Entities;
 using TaskPulse.API.Entities.EnumForEntities;
 using TaskPulse.API.ExceptionHandling.ExceptionHandlers;
 using TaskPulse.API.Helper.AuthorizationHelper;
+using TaskPulse.API.Repository.ApprovalRepo;
 using TaskPulse.API.Repository.ProjectRepo;
 using TaskPulse.API.Repository.UserRepo;
 using TaskPulse.API.Services.Infrastructure;
@@ -22,7 +24,9 @@ namespace TaskPulse.API.Services.implementations
         private readonly CheckValidationRun _validationRunner;
         private readonly ProjectRepository _projectRepository;
         private readonly UserRepository _userRepository;
+        private readonly ApprovalRequestRepository _approvalRepository;
         private readonly IApprovalGate _approvalGate;
+        private readonly IApprovalService _approvalService;
         private readonly IActivityLogger _activityLogger;
         private readonly INotifier _notifier;
 
@@ -31,7 +35,9 @@ namespace TaskPulse.API.Services.implementations
             CheckValidationRun validationRunner,
             ProjectRepository projectRepository,
             UserRepository userRepository,
+            ApprovalRequestRepository approvalRepository,
             IApprovalGate approvalGate,
+            IApprovalService approvalService,
             IActivityLogger activityLogger,
             INotifier notifier)
             : base(customExceptionHandler)
@@ -39,7 +45,9 @@ namespace TaskPulse.API.Services.implementations
             _validationRunner = validationRunner;
             _projectRepository = projectRepository;
             _userRepository = userRepository;
+            _approvalRepository = approvalRepository;
             _approvalGate = approvalGate;
+            _approvalService = approvalService;
             _activityLogger = activityLogger;
             _notifier = notifier;
         }
@@ -54,6 +62,26 @@ namespace TaskPulse.API.Services.implementations
             try
             {
                 var page = await _projectRepository.GetPagedAsync(query, callerIsAdmin ? null : callerId);
+                return CommonResponseFactory.CreateSuccessResponse(page.MapItems(ProjectDTO.FromEntity), "Projects retrieved.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Reuses GetPagedAsync's existing membership-scoping — passing the
+        // *target* user's id instead of the caller's is all "projects this
+        // person belongs to" needs.
+        public async Task<CommonResponse<PagedResult<ProjectDTO>>> GetProjectsForUserAsync(int userId)
+        {
+            var response = new CommonResponse<PagedResult<ProjectDTO>>();
+
+            try
+            {
+                var query = new ProjectQueryDto { PageSize = 100 };
+                var page = await _projectRepository.GetPagedAsync(query, userId);
                 return CommonResponseFactory.CreateSuccessResponse(page.MapItems(ProjectDTO.FromEntity), "Projects retrieved.");
             }
             catch (Exception ex)
@@ -149,8 +177,10 @@ namespace TaskPulse.API.Services.implementations
         }
 
 
-        // Update Project Service Method — goes through the approval gate when a
-        // Manager is editing something the Admin created.
+        // Update Project Service Method — any project member can propose an
+        // edit; it applies immediately for the project's creator (or an
+        // Admin), and goes through the creator-resolved edit-request gate
+        // for everyone else.
         public async Task<CommonResponse<ProjectDTO>> UpdateProjectAsync(UpdateProjectDto dto, int callerId, bool callerIsAdmin)
         {
             var response = new CommonResponse<ProjectDTO>();
@@ -165,7 +195,7 @@ namespace TaskPulse.API.Services.implementations
                 if (project is null)
                     return CommonResponseFactory.CreateErrorResponse<ProjectDTO>("Project not found.", HttpStatusCode.NotFound);
 
-                var access = ProjectAccess.CheckManager(project, callerId, callerIsAdmin);
+                var access = ProjectAccess.CheckMember(project, callerId, callerIsAdmin);
                 if (access is not null)
                     return CommonResponseFactory.CreateErrorResponse<ProjectDTO>(access, HttpStatusCode.Forbidden);
 
@@ -173,13 +203,24 @@ namespace TaskPulse.API.Services.implementations
                     ApprovalActionType.UpdateProject,
                     nameof(Project),
                     project.Id,
-                    NeedsApproval(project, callerIsAdmin),
+                    NeedsApproval(project, callerId, callerIsAdmin),
                     callerId,
                     () => ApplyProjectChangesAsync(project, dto),
                     dto);
 
                 if (!gate.Executed)
-                    return PendingApprovalResponse<ProjectDTO>(gate);
+                {
+                    await NotifyCreatorOfPendingRequestAsync(project, gate);
+
+                    // Unlike PendingApprovalResponse<T> below (used where there's
+                    // no natural "unchanged" value to fall back to), a caller
+                    // editing a project still expects a full ProjectDTO back —
+                    // just the pre-edit one, since nothing was applied yet.
+                    var pendingMessage = gate.AlreadyPending
+                        ? $"This change is already waiting for the project creator's approval (request #{gate.ApprovalRequestId})."
+                        : $"This change needs the project creator's approval and has been sent for review (request #{gate.ApprovalRequestId}).";
+                    return CommonResponseFactory.CreateSuccessResponse(ProjectDTO.FromEntity(project), pendingMessage);
+                }
 
                 await _activityLogger.LogAsync(callerId, ActivityAction.ProjectUpdated, $"Updated project '{project.Name}'.", project.Id);
 
@@ -213,12 +254,15 @@ namespace TaskPulse.API.Services.implementations
                     ApprovalActionType.DeleteProject,
                     nameof(Project),
                     project.Id,
-                    NeedsApproval(project, callerIsAdmin),
+                    NeedsApproval(project, callerId, callerIsAdmin),
                     callerId,
                     () => _projectRepository.DeleteAsync(project));
 
                 if (!gate.Executed)
+                {
+                    await NotifyCreatorOfPendingRequestAsync(project, gate);
                     return PendingApprovalResponse<string>(gate);
+                }
 
                 await _activityLogger.LogAsync(callerId, ActivityAction.ProjectDeleted, $"Deleted project '{projectName}'.");
 
@@ -343,10 +387,87 @@ namespace TaskPulse.API.Services.implementations
         }
 
 
-        // Anything the Admin set up is off-limits to a Manager without a yes.
-        private static bool NeedsApproval(Project project, bool callerIsAdmin)
+        // Pending UpdateProject requests on projects the caller created —
+        // theirs to approve or reject, whatever their role.
+        public async Task<CommonResponse<List<ApprovalRequestDTO>>> GetPendingEditRequestsForCreatorAsync(int callerId)
         {
-            return !callerIsAdmin && project.CreatedByRole == UserRole.Admin;
+            var response = new CommonResponse<List<ApprovalRequestDTO>>();
+
+            try
+            {
+                var requests = await _approvalRepository.GetPendingForProjectCreatorAsync(callerId);
+                return CommonResponseFactory.CreateSuccessResponse(requests.Select(ApprovalRequestDTO.FromEntity).ToList(), "Found.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+        public async Task<CommonResponse<List<ApprovalRequestDTO>>> GetSentEditRequestsAsync(int callerId)
+        {
+            var response = new CommonResponse<List<ApprovalRequestDTO>>();
+
+            try
+            {
+                var requests = await _approvalRepository.GetSentByAsync(callerId, ApprovalActionType.UpdateProject);
+                return CommonResponseFactory.CreateSuccessResponse(requests.Select(ApprovalRequestDTO.FromEntity).ToList(), "Found.");
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+        // Reuses ApprovalService's actual approve/reject logic (it doesn't
+        // itself check who's calling) — only the authorization here differs
+        // from the Admin queue: the project's creator may resolve this one too.
+        public async Task<CommonResponse<ApprovalRequestDTO>> RespondToEditRequestAsync(int requestId, int callerId, bool callerIsAdmin, bool approve, string? note)
+        {
+            var response = new CommonResponse<ApprovalRequestDTO>();
+
+            try
+            {
+                var request = await _approvalRepository.GetByIdAsync(requestId);
+                if (request is null || request.ActionType != ApprovalActionType.UpdateProject)
+                    return CommonResponseFactory.CreateErrorResponse<ApprovalRequestDTO>("Edit request not found.", HttpStatusCode.NotFound);
+
+                var project = await _projectRepository.GetByIdAsync(request.TargetEntityId);
+                if (project is null)
+                    return CommonResponseFactory.CreateErrorResponse<ApprovalRequestDTO>("Project not found.", HttpStatusCode.NotFound);
+
+                if (!callerIsAdmin && project.CreatedByUserId != callerId)
+                    return CommonResponseFactory.CreateErrorResponse<ApprovalRequestDTO>(
+                        "Only this project's creator can respond to this request.", HttpStatusCode.Forbidden);
+
+                var dto = new ResolveApprovalDto { Note = note };
+                return approve
+                    ? await _approvalService.ApproveAsync(requestId, callerId, dto)
+                    : await _approvalService.RejectAsync(requestId, callerId, dto);
+            }
+            catch (Exception ex)
+            {
+                return await _customExceptionHandler.HandleAsync(ex, CommonResponseMessage.ServerError.ToText(), response);
+            }
+        }
+
+
+        // Only the project's own creator (or an Admin) can change/delete it
+        // without asking first — everyone else needs that creator's sign-off.
+        private static bool NeedsApproval(Project project, int callerId, bool callerIsAdmin)
+        {
+            return !callerIsAdmin && project.CreatedByUserId != callerId;
+        }
+
+        // The generic gate only pages Admins — the actual approver for one of
+        // these is the project's creator, so tell them directly too.
+        private async Task NotifyCreatorOfPendingRequestAsync(Project project, ApprovalGateResult gate)
+        {
+            if (gate.AlreadyPending)
+                return;
+
+            await _notifier.NotifyAsync(project.CreatedByUserId, NotificationType.ApprovalRequired,
+                $"A change to '{project.Name}' is waiting for your approval.", nameof(Project), project.Id);
         }
 
         private Task ApplyProjectChangesAsync(Project project, UpdateProjectDto dto)
@@ -367,8 +488,8 @@ namespace TaskPulse.API.Services.implementations
         private static CommonResponse<T> PendingApprovalResponse<T>(ApprovalGateResult gate)
         {
             var message = gate.AlreadyPending
-                ? $"This change is already waiting for Admin approval (request #{gate.ApprovalRequestId})."
-                : $"This change needs Admin approval and has been sent for review (request #{gate.ApprovalRequestId}).";
+                ? $"This change is already waiting for the project creator's approval (request #{gate.ApprovalRequestId})."
+                : $"This change needs the project creator's approval and has been sent for review (request #{gate.ApprovalRequestId}).";
 
             return new CommonResponse<T>
             {

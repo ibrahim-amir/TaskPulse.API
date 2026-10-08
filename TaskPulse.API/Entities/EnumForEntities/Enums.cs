@@ -41,6 +41,7 @@ public enum ActivityAction
     UserProfileUpdated,
     UserRoleChanged,
     UserStatusChanged,
+    UserDeleted,
     EmailConfirmed,
     PasswordReset,
     ProjectCreated,
@@ -72,7 +73,35 @@ public enum ApprovalActionType
 {
     UpdateProject,
     DeleteProject,
-    RemoveProjectMember
+    RemoveProjectMember,
+
+    // A Member/Manager submitting a task's completed checklist for the
+    // Admin to sign off on — always gated, unlike the other three which are
+    // only gated when a Manager (not the Admin) is the one acting.
+    CompleteTask,
+
+    // Someone not currently on a task asking to be added to it — always
+    // gated, same reasoning as CompleteTask.
+    AssignTaskRequest,
+
+    // Someone other than the task's creator editing it — resolved by that
+    // creator, not by an Admin (see UpdateTask edit-request endpoints).
+    UpdateTask,
+
+    // A Manager assigning a user who's marked themselves busy — resolved by
+    // that user, or by an Admin (see the assignment-requests endpoints).
+    AssignBusyUser,
+
+    // Someone other than the task's creator deleting it — resolved by that
+    // creator, not by an Admin. Same creator-resolved gate as UpdateTask,
+    // reusing the same edit-request endpoints.
+    DeleteTask,
+
+    // A plain Member duplicating a task — resolved by a Manager/Admin of
+    // that task's project, not the generic Admin-only queue (see the
+    // duplicate-requests endpoints). A Manager/Admin's own duplicate never
+    // goes through this — it's created immediately.
+    DuplicateTask
 }
 
 public enum ApprovalStatus
@@ -90,5 +119,9 @@ public enum NotificationType
     CommentAdded,
     AddedToProject,
     ApprovalRequired,
-    ApprovalResolved
+    ApprovalResolved,
+
+    // A manual, user-composed notification sent from one account to another
+    // (e.g. from a profile page) — not raised by the system itself.
+    DirectMessage
 }

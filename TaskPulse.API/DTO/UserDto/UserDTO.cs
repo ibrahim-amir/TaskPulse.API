@@ -11,6 +11,8 @@ namespace TaskPulse.API.DTO.UserDto
         public DateTime CreatedAt { get; set; }
         public bool IsDisabled { get; set; }
         public UserRole Role { get; set; }
+        public bool MustChangePassword { get; set; }
+        public bool IsAvailableForAssignment { get; set; }
 
         public static UserDTO CreateUserDtoFromUserEntity(User user)
         {
@@ -22,7 +24,9 @@ namespace TaskPulse.API.DTO.UserDto
                 profileImageUrl = user.profileImageUrl,
                 CreatedAt = user.CreatedAt,
                 IsDisabled = user.IsDisabled,
-                Role = user.Role
+                Role = user.Role,
+                MustChangePassword = user.MustChangePassword,
+                IsAvailableForAssignment = user.IsAvailableForAssignment
             };
         }
     }

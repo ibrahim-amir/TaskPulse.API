@@ -5,11 +5,28 @@ namespace TaskPulse.API.Helper.FileHelper
     // into a validator the same way the existence checker does.
     public class UploadedFileValidator
     {
+        private static readonly HashSet<string> ImageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".webp"];
+
         private readonly FileUploadOptions _options;
 
         public UploadedFileValidator(FileUploadOptions options)
         {
             _options = options;
+        }
+
+        // Same size/name checks as Validate, but restricted to image
+        // extensions regardless of what FileUpload:AllowedExtensions permits
+        // generally (an avatar being a .zip makes no sense).
+        public List<string> ValidateImage(IFormFile? file)
+        {
+            var errors = Validate(file);
+            if (file is not null && file.Length > 0)
+            {
+                var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+                if (!ImageExtensions.Contains(extension))
+                    errors.Add("Profile pictures must be a PNG, JPG or GIF.");
+            }
+            return errors;
         }
 
         public List<string> Validate(IFormFile? file)

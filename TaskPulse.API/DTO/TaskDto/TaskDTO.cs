@@ -1,4 +1,5 @@
 using TaskPulse.API.DTO.SubtaskDto;
+using TaskPulse.API.DTO.TaskTodoDto;
 using TaskPulse.API.Entities;
 using TaskPulse.API.Entities.EnumForEntities;
 
@@ -28,6 +29,12 @@ public class TaskDTO
     public int UploadedFileCount { get; set; }
     public int ProgressPercent { get; set; }
 
+    // A separate, self-ticked checklist — no files, no review, just text
+    // someone on the task ticks off. Drives the card's progress fill on its
+    // own, independent of the required-file checklist above.
+    public List<TaskTodoItemDTO> TodoItems { get; set; } = new();
+    public int TodoProgressPercent { get; set; }
+
     // True once the due date has passed with the task still open.
     public bool IsOverdue { get; set; }
 
@@ -36,6 +43,9 @@ public class TaskDTO
         var subtasks = task.Subtasks?.ToList() ?? new List<TaskSubtask>();
         var required = subtasks.Count;
         var uploaded = subtasks.Count(s => s.IsUploaded);
+
+        var todoItems = task.TodoItems?.ToList() ?? new List<TaskTodoItem>();
+        var todosDone = todoItems.Count(t => t.IsDone);
 
         return new TaskDTO
         {
@@ -56,6 +66,8 @@ public class TaskDTO
             RequiredFileCount = required,
             UploadedFileCount = uploaded,
             ProgressPercent = required == 0 ? 0 : (int)Math.Round(uploaded * 100.0 / required),
+            TodoItems = todoItems.Select(TaskTodoItemDTO.FromEntity).ToList(),
+            TodoProgressPercent = todoItems.Count == 0 ? 0 : (int)Math.Round(todosDone * 100.0 / todoItems.Count),
             IsOverdue = task.DueDate.HasValue
                         && task.DueDate.Value < DateTime.UtcNow
                         && task.Status != TaskItemStatus.Done

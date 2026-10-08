@@ -76,5 +76,15 @@ namespace TaskPulse.API.Controllers
         {
             return Respond(await _userService.ResetPasswordAsync(dto));
         }
+
+        // The logged-in-user path — current password required. Also how an
+        // Admin-provisioned account clears MustChangePassword.
+        [HttpPost("change-password")]
+        [Authorize]
+        public async Task<IActionResult> ChangePassword(ChangePasswordDto dto)
+        {
+            dto.Id = User.GetUserId();
+            return Respond(await _userService.ChangePasswordAsync(dto));
+        }
     }
 }

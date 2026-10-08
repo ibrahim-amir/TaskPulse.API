@@ -12,6 +12,11 @@ public class ProgressReportDto
 
     public DeadlineHealthDto DeadlineHealth { get; set; } = new();
     public List<ProjectProgressDto> Projects { get; set; } = new();
+
+    // Every (priority, status) combination across the same scope as the rest
+    // of this report, including zero-count cells — a heatmap grid, not just
+    // a list of what happens to exist.
+    public List<PriorityStatusCellDto> PriorityStatusMatrix { get; set; } = new();
 }
 
 // Open tasks bucketed by how their due date is looking. Late is past due;
@@ -35,4 +40,16 @@ public class ProjectProgressDto
     public int OverdueTaskCount { get; set; }
     public decimal EstimatedHours { get; set; }
     public decimal ActualHours { get; set; }
+
+    // This project's own slice of the same On track/At risk/Late/No due
+    // date buckets as the org-wide DeadlineHealthDto above.
+    public DeadlineHealthDto DeadlineHealth { get; set; } = new();
+}
+
+// One cell of the priority x status heatmap.
+public class PriorityStatusCellDto
+{
+    public string Priority { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int Count { get; set; }
 }

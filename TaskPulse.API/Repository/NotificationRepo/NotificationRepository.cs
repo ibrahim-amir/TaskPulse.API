@@ -68,5 +68,80 @@ namespace TaskPulse.API.Repository.NotificationRepo
                 .Where(n => n.UserId == userId && !n.IsRead)
                 .ExecuteUpdateAsync(setter => setter.SetProperty(n => n.IsRead, true));
         }
+
+        public async Task DeleteAsync(Notification notification)
+        {
+            _db.Notifications.Remove(notification);
+            await _db.SaveChangesAsync();
+        }
+
+        public async Task<int> DeleteAllForUserAsync(int userId)
+        {
+            return await _db.Notifications.Where(n => n.UserId == userId).ExecuteDeleteAsync();
+        }
+
+        // Only the caller's own rows for this conversation — the other
+        // person's copies (their own UserId-scoped rows) are untouched, so
+        // clearing your view doesn't clear theirs.
+        public async Task<int> DeleteConversationAsync(int userId, int otherUserId)
+        {
+            return await _db.Notifications
+                .Where(n => n.UserId == userId
+                         && n.Type == NotificationType.DirectMessage
+                         && n.RelatedEntityType == "User"
+                         && n.RelatedEntityId == otherUserId)
+                .ExecuteDeleteAsync();
+        }
+
+        // Every DirectMessage row the caller owns that's about this one other
+        // person — thanks to SendAsync's mirror copy, that's both halves of
+        // the exchange, oldest first so it reads top-down like a chat.
+        public async Task<List<Notification>> GetConversationAsync(int userId, int otherUserId)
+        {
+            return await _db.Notifications
+                .AsNoTracking()
+                .Where(n => n.UserId == userId
+                         && n.Type == NotificationType.DirectMessage
+                         && n.RelatedEntityType == "User"
+                         && n.RelatedEntityId == otherUserId)
+                .OrderBy(n => n.Id)
+                .ToListAsync();
+        }
+
+        // One row per distinct counterparty, latest message + unread count —
+        // the chat-app-style conversation list.
+        public async Task<List<ConversationSummaryDto>> GetConversationSummariesAsync(int userId)
+        {
+            var grouped = await _db.Notifications
+                .AsNoTracking()
+                .Where(n => n.UserId == userId && n.Type == NotificationType.DirectMessage && n.RelatedEntityId != null)
+                .GroupBy(n => n.RelatedEntityId!.Value)
+                .Select(g => new
+                {
+                    OtherUserId = g.Key,
+                    LastMessage = g.OrderByDescending(n => n.Id).First().Message,
+                    LastMessageAt = g.OrderByDescending(n => n.Id).First().CreatedAt,
+                    UnreadCount = g.Count(n => !n.IsOutgoing && !n.IsRead)
+                })
+                .ToListAsync();
+
+            var otherUserIds = grouped.Select(g => g.OtherUserId).ToList();
+            var users = await _db.Users
+                .Where(u => otherUserIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => new { u.Name, u.profileImageUrl });
+
+            return grouped
+                .Select(g => new ConversationSummaryDto
+                {
+                    OtherUserId = g.OtherUserId,
+                    OtherUserName = users.TryGetValue(g.OtherUserId, out var user) ? user.Name : "Unknown",
+                    OtherUserProfileImageUrl = users.TryGetValue(g.OtherUserId, out var u2) ? u2.profileImageUrl : null,
+                    LastMessage = g.LastMessage,
+                    LastMessageAt = g.LastMessageAt,
+                    UnreadCount = g.UnreadCount
+                })
+                .OrderByDescending(c => c.LastMessageAt)
+                .ToList();
+        }
     }
 }
