@@ -26,3 +26,21 @@ Thumbs.db
 
 # ===== Uploaded files (if TaskAttachments are stored on disk locally) =====
 wwwroot/uploads/
+
+# ===== Runtime data (generated while running locally — never commit) =====
+# Serilog output: contains real user emails and request details
+**/logs/
+# Task attachments saved to disk (FileUpload:StorageRoot = "uploads")
+TaskPulse.API/uploads/
+# User-uploaded avatars and chat images
+TaskPulse.API/wwwroot/avatars/
+TaskPulse.API/wwwroot/chat-images/
+
+# Test run output
+test-results.txt
+TestResults/
+
+# Secrets safety net (real values live in User Secrets)
+*.env
+.env.*
+secrets.json
