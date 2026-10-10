@@ -1,180 +1,146 @@
-# TaskPulse: Full-Stack Task & Project Management System
+# TaskPulse
 
-A full-stack Task and Project Management System where users create and manage
-projects, add team members, create and assign tasks, track progress, comment
-on tasks, upload attachments, receive notifications, and monitor performance
-through dashboards and reports.
+A full-stack task and project management platform built with **ASP.NET Core (.NET 10)** and **Angular**. Teams create projects, assign and track tasks, route sensitive changes through an approval workflow, chat, and get AI-generated insights on project health, all behind role-based access.
 
-**Current status:** backend-first build. The Angular frontend hasn't been
-started yet. The API is being built and tested via Swagger/Postman first,
-then the frontend will follow.
+![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Angular](https://img.shields.io/badge/Angular-15-DD0031) ![SQL Server](https://img.shields.io/badge/SQL%20Server-EF%20Core-CC2927) ![Tests](https://img.shields.io/badge/tests-117%20passing-2ea44f)
 
-## Technology Stack
+## Features
 
-| Layer          | Technology                                  |
-|----------------|----------------------------------------------|
-| Frontend       | Angular 15+, TypeScript, RxJS, Reactive Forms (not started yet) |
-| Backend        | .NET 8, ASP.NET Core Web API                  |
-| ORM            | Entity Framework Core (Code-First)            |
-| Database       | Microsoft SQL Server                          |
-| Auth           | JWT (JSON Web Tokens)                         |
-| API Docs       | Swagger / OpenAPI                             |
-| API Testing    | Postman (during backend-only development)     |
-| Charts         | Chart.js or equivalent (later, dashboard phase) |
+**Authentication & accounts**
+- JWT access tokens with refresh tokens and "remember me" sessions
+- Email confirmation, forgot/reset password and change password flows (SMTP via MailKit)
+- Passwords hashed with BCrypt; refresh tokens stored hashed
+- Roles: **Admin**, **Manager**, **Member**, enforced on every endpoint
 
-## Project Architecture
+**Projects & tasks**
+- Projects with member management
+- Tasks with assignment, status, priority, subtasks, to-do checklists and file attachments
+- Search, filtering, sorting and pagination on list endpoints
+- Comments on tasks and an activity log of every change
 
-Current repo layout (backend-only for now):
+**Approval workflow**
+- Sensitive actions (deleting or updating projects/tasks, removing members, completing or reassigning tasks, assigning a busy user, duplicating tasks) create an approval request instead of executing immediately
+- Each action type has its own handler (strategy pattern), so new approval types plug in without touching existing code
+
+**Collaboration**
+- Notifications and direct conversations, including image messages
+- User profiles with avatars and availability status
+- Attendance tracking
+
+**Dashboards & reports**
+- Summary and per-project dashboards, progress reports and user performance stats
+- Background service that monitors deadlines and notifies users about tasks due soon or overdue
+
+**AI insights (Google Gemini)**
+- AI task suggestions, project summaries and risk reports
+- Team member assessments
+- Project-aware chat and an in-app help assistant
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | ASP.NET Core Web API (.NET 10), C# |
+| Data | Entity Framework Core (code-first migrations), SQL Server |
+| Validation | FluentValidation |
+| Auth | JWT bearer + refresh tokens, BCrypt |
+| Email | MailKit (SMTP) |
+| Logging | Serilog (rolling file logs) |
+| AI | Google Gemini REST API |
+| API docs | Swagger / OpenAPI |
+| Frontend | Angular 15, TypeScript, RxJS, Reactive Forms |
+| Testing | xUnit integration tests with `WebApplicationFactory` |
+
+## Architecture
 
 ```
-TaskPulse.API/                      ← repo root (this is the solution folder)
-├── TaskPulse.API.slnx
-└── TaskPulse.API/                  ← the actual project folder (.csproj lives here)
-    ├── Controllers/     # HTTP request/response only
-    ├── Services/        # Business logic (added as CRUD is built out)
-    ├── Repositories/    # Data access (added as CRUD is built out)
-    ├── DTOs/            # API request/response shapes
-    ├── Entities/        # EF Core entity classes
-    ├── Data/            # AppDbContext
-    ├── Migrations/      # EF Core migrations
-    ├── Middleware/      # Global exception handling, etc.
-    ├── Helpers/
-    ├── Validators/
-    └── Program.cs
+TaskPulse.API/                  solution root
+├── TaskPulse.API/              Web API project
+│   ├── Controllers/            HTTP layer only
+│   ├── Services/               business logic (interfaces + implementations)
+│   │   ├── ApprovalHandlers/   one handler per approval action type
+│   │   └── BackgroundServices/ deadline monitor
+│   ├── Repository/             data access per aggregate
+│   ├── Entities/               EF Core entities
+│   ├── DTO/                    request/response models
+│   ├── Validation/             input + business-rule validators
+│   ├── ExceptionHandling/      global and custom exception handlers
+│   ├── Helper/                 authorization, paging, file storage, hashing
+│   ├── Data/                   AppDbContext
+│   └── Migrations/
+├── TaskPulse.API.Tests/        xUnit integration tests
+└── frontend/taskpulse-client/  Angular app
 ```
 
-Once the Angular app is started, a `frontend/taskpulse-client/` folder will
-be added as a sibling of `TaskPulse.API/` at the repo root, with the usual
-`core/`, `shared/`, `features/` structure.
+Requests flow **Controller → Service → Repository → EF Core**. Responses use a common response envelope, and errors are handled centrally by a global exception handler.
 
-## User Roles & Permissions
+## Getting Started
 
-| Role    | Can do |
-|---------|--------|
-| Admin   | Create/edit/disable/delete users, view & manage all projects, manage project members, view activity logs, view system-wide statistics |
-| Manager | Create/edit projects, manage project members, create/assign/edit/delete tasks (where authorized), view project reports, monitor progress |
-| Member  | View assigned projects/tasks, update task status, add comments, upload attachments |
+### Prerequisites
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- SQL Server or LocalDB
+- EF Core CLI: `dotnet tool install --global dotnet-ef`
+- Node.js 18+ and npm (for the frontend)
 
-Authorization is enforced on the backend via `[Authorize(Roles = "...")]`.
-The frontend (once built) restricts UI access for UX, but the API is the
-actual gate.
+### 1. Configure secrets
 
-## Prerequisites
-
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
-- SQL Server (LocalDB, Developer Edition, or a full instance)
-- EF Core CLI tool: `dotnet tool install --global dotnet-ef`
-- [Postman](https://www.postman.com/) for exercising the API during
-  backend-only development
-- (Later, once frontend work starts) Node.js 18+, npm, Angular CLI
-
-## Backend Setup
-
-1. **Configure the connection string** in
-   `TaskPulse.API/appsettings.json` (or an `appsettings.Development.json`
-   you create locally, which is gitignored):
-
-   ```json
-   {
-     "ConnectionStrings": {
-       "DefaultConnection": "Server=localhost;Database=TaskPulseDb;Trusted_Connection=True;TrustServerCertificate=True;"
-     }
-   }
-   ```
-
-   Adjust `Server=` for a named instance (e.g. `.\SQLEXPRESS`) or use
-   SQL auth (`User Id=...;Password=...;`) if that's your setup.
-
-2. **Apply EF Core migrations** (creates the database and all 8 tables):
-
-   ```bash
-   cd TaskPulse.API
-   dotnet ef database update
-   ```
-
-   (Or in Visual Studio's Package Manager Console, with `TaskPulse.API` set
-   as the default project: `Update-Database`.)
-
-3. **Run the API:**
-
-   ```bash
-   dotnet run
-   ```
-
-   Swagger UI is available at `https://localhost:<port>/swagger` once
-   running. Every endpoint is testable from there, including with a Bearer
-   token pasted in after logging in. A Postman collection can also be kept
-   alongside this repo (or exported/committed under a `postman/` folder) for
-   quicker repeat testing while the frontend doesn't exist yet.
-
-### Creating migrations after entity changes
-
-Whenever an entity class changes (new field, new relationship):
+Secrets are never stored in `appsettings.json`. Set them with .NET User Secrets from the `TaskPulse.API/TaskPulse.API` folder:
 
 ```bash
-dotnet ef migrations add <DescriptiveName>
-dotnet ef database update
+dotnet user-secrets set "Jwt:Key" "<a long random string, 32+ characters>"
+dotnet user-secrets set "Gemini:ApiKey" "<your Gemini API key>"        # optional, AI features
+dotnet user-secrets set "Smtp:Username" "<your Gmail address>"         # optional, real emails
+dotnet user-secrets set "Smtp:AppPassword" "<your Gmail app password>" # optional, real emails
 ```
 
-## Frontend Setup
+Without the Gemini key, AI endpoints are skipped. Without SMTP credentials, emails are written to the log instead of being sent.
 
-*Not started yet.* Once the Angular app is scaffolded (roadmap Phase 5),
-this section will cover `cd frontend/taskpulse-client`, `npm install`,
-`ng serve`, and the API base URL configuration.
+The default connection string points at LocalDB (`(localdb)\mssqllocaldb`). Change `ConnectionStrings:DefaultConnection` if you use another instance.
 
-## Default / Test Login Credentials
-
-No seed data exists yet. To get a first account:
-
-1. Register via `POST /api/auth/register` (through Swagger or Postman).
-   This creates a `Member` by default.
-2. To get an `Admin` account for testing, register normally, then manually
-   update that user's `Role` column to `Admin` directly in the database
-   (or add a one-time seed script under `Data/`, recommended before
-   demoing, since test credentials should be documented here).
-
-*(This section should be filled in with real seeded credentials once a
-seed/data script is added, e.g. `admin@taskpulse.com` / a known password,
-before release.)*
-
-## Running Tests
-
-**Backend** (minimum 10 unit tests required: auth, project CRUD, task CRUD,
-task filtering, authorization, invalid requests):
+### 2. Create the database and run the API
 
 ```bash
 cd TaskPulse.API
+dotnet ef database update
+dotnet run --launch-profile https
+```
+
+Swagger UI: `https://localhost:7070/swagger`
+
+### 3. Run the frontend
+
+```bash
+cd frontend/taskpulse-client
+npm install
+npm start
+```
+
+The app runs at `http://localhost:4200` and calls the API at `https://localhost:7070/api`.
+
+## Running Tests
+
+```bash
 dotnet test
 ```
 
-**Frontend**: not applicable yet; will cover `ng test` once the Angular app
-exists (minimum 5 tests required: login form validation, project form
-validation, task form validation, task filtering, dashboard stats).
+117 integration tests cover authentication, users, projects, tasks, files and checklists, comments, notifications, activity logs, dashboards and the approval workflow. They run against the real API pipeline using `WebApplicationFactory`.
 
 ## API Overview
 
-Full endpoint list and filtering/pagination/sorting query parameters are
-documented in Swagger once the API is running. Key resource groups:
+Every endpoint is documented and testable in Swagger once the API is running. Main areas:
 
-- `/api/auth`: register, login, me
-- `/api/users`: CRUD (Admin only)
-- `/api/projects`: CRUD, `/api/projects/{id}/members`
-- `/api/projects/{projectId}/tasks`, `/api/tasks/{id}`: supports
-  `?search=&status=&priority=&assignedUserId=&sortBy=&sortOrder=&page=&pageSize=`
-- `/api/tasks/{taskId}/comments`
-- `/api/notifications`
-- `/api/dashboard/summary`, `/api/dashboard/project/{projectId}`
+| Area | Covers |
+|---|---|
+| Auth | register, login, refresh, confirm email, password reset |
+| Users | profiles, roles, status (admin) |
+| Projects | projects and members |
+| Tasks | tasks, subtasks, checklists, attachments, comments |
+| Approvals | approval requests and decisions |
+| Notifications | notifications and conversations |
+| Dashboard | summaries, reports, performance |
+| Activity logs | audit trail |
+| Help | AI help assistant |
 
-## Status
+## Author
 
-- [x] Database design, ER diagram, EF Core entities
-- [x] JWT authentication (register/login/me)
-- [ ] Backend CRUD for Projects/Tasks/Members/Comments/Attachments/
-      Notifications/ActivityLogs (in progress, DTOs being designed now)
-- [ ] Angular frontend (not started)
-- [ ] Unit tests
-- [ ] Final polish
-
-## License
-
-Personal project.
+**Muhammad Ibrahim**, BS Computer Science, University of Central Punjab, Lahore
