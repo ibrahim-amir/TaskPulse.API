@@ -1,8 +1,10 @@
 # TaskPulse
 
-A full-stack task and project management platform built with **ASP.NET Core (.NET 10)** and **Angular**. Teams create projects, assign and track tasks, route sensitive changes through an approval workflow, chat, and get AI-generated insights on project health, all behind role-based access.
+The backend API for TaskPulse, a task and project management platform built with **ASP.NET Core (.NET 10)**. Teams create projects, assign and track tasks, route sensitive changes through an approval workflow, chat, and get AI-generated insights on project health, all behind role-based access.
 
-![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Angular](https://img.shields.io/badge/Angular-15-DD0031) ![SQL Server](https://img.shields.io/badge/SQL%20Server-EF%20Core-CC2927) ![Tests](https://img.shields.io/badge/tests-117%20passing-2ea44f)
+**Frontend:** the Next.js client lives in its own repo, [TaskPulse.FrontEnd](https://github.com/ibrahim-amir/TaskPulse.FrontEnd).
+
+![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![SQL Server](https://img.shields.io/badge/SQL%20Server-EF%20Core-CC2927) ![Tests](https://img.shields.io/badge/tests-117%20passing-2ea44f)
 
 ## Features
 
@@ -48,7 +50,6 @@ A full-stack task and project management platform built with **ASP.NET Core (.NE
 | Logging | Serilog (rolling file logs) |
 | AI | Google Gemini REST API |
 | API docs | Swagger / OpenAPI |
-| Frontend | Angular 15, TypeScript, RxJS, Reactive Forms |
 | Testing | xUnit integration tests with `WebApplicationFactory` |
 
 ## Architecture
@@ -68,8 +69,7 @@ TaskPulse.API/                  solution root
 │   ├── Helper/                 authorization, paging, file storage, hashing
 │   ├── Data/                   AppDbContext
 │   └── Migrations/
-├── TaskPulse.API.Tests/        xUnit integration tests
-└── frontend/taskpulse-client/  Angular app
+└── TaskPulse.API.Tests/        xUnit integration tests
 ```
 
 Requests flow **Controller → Service → Repository → EF Core**. Responses use a common response envelope, and errors are handled centrally by a global exception handler.
@@ -80,7 +80,6 @@ Requests flow **Controller → Service → Repository → EF Core**. Responses u
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - SQL Server or LocalDB
 - EF Core CLI: `dotnet tool install --global dotnet-ef`
-- Node.js 18+ and npm (for the frontend)
 
 ### 1. Configure secrets
 
@@ -109,13 +108,7 @@ Swagger UI: `https://localhost:7070/swagger`
 
 ### 3. Run the frontend
 
-```bash
-cd frontend/taskpulse-client
-npm install
-npm start
-```
-
-The app runs at `http://localhost:4200` and calls the API at `https://localhost:7070/api`.
+Clone [TaskPulse.FrontEnd](https://github.com/ibrahim-amir/TaskPulse.FrontEnd) and follow its README. Set `NEXT_PUBLIC_API_BASE_URL=https://localhost:7070` in its `.env.local`. The API's CORS policy already allows `http://localhost:3000`.
 
 ## Running Tests
 
